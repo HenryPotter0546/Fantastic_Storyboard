@@ -5,6 +5,7 @@ from services.diffusion_service import LocalDiffusionService
 import asyncio
 from typing import List
 from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 import traceback
 import logging
 import json
@@ -14,6 +15,8 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="小说转漫画API")
+
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 class NovelRequest(BaseModel):
     text: str
@@ -63,6 +66,7 @@ async def root():
         </head>
         <body>
             <div class="container">
+                <img src="/static/ThePromisedLand.png" alt="项目标识" style="max-width: 200px; display: block; margin: 0 auto 20px auto; border-radius: 8px;">
                 <h1>小说转漫画服务 (本地Diffusion)</h1>
                 <div>
                     <textarea id="novelText" placeholder="请输入小说文本..."></textarea>
