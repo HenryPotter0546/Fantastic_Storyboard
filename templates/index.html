@@ -39,6 +39,12 @@
                 <h1>小说转漫画服务 (本地Diffusion)</h1>
                 <div>
                     <textarea id="novelText" placeholder="请输入小说文本..."></textarea>
+                    <div style="margin: 10px 0;">
+                        <label for="modelSelect">选择模型：</label>
+                        <select id="modelSelect" style="padding: 5px; margin-left: 10px;">
+                            <option value="">加载中...</option>
+                        </select>
+                    </div>
                     <div>
                         <label for="numScenes">场景数量：</label>
                         <input type="number" id="numScenes" value="10" min="1" max="20">
@@ -49,6 +55,33 @@
             </div>
 
             <script>
+                // 页面加载时获取可用模型列表
+                window.addEventListener('load', async function() {
+                    try {
+                        const response = await fetch('/available-models');
+                        const data = await response.json();
+                        
+                        const modelSelect = document.getElementById('modelSelect');
+                        modelSelect.innerHTML = '';
+                        
+                        if (data.models && data.models.length > 0) {
+                            data.models.forEach(model => {
+                                const option = document.createElement('option');
+                                option.value = model;
+                                option.textContent = model;
+                                modelSelect.appendChild(option);
+                            });
+                        } else {
+                            const option = document.createElement('option');
+                            option.value = '';
+                            option.textContent = '无可用模型';
+                            modelSelect.appendChild(option);
+                        }
+                    } catch (error) {
+                        console.error('获取模型列表失败:', error);
+                    }
+                });
+
                 async function regenerateImage(sceneIndex) {
                     const sceneDiv = document.querySelector(`#scene-${sceneIndex}`);
                     const statusDiv = sceneDiv.querySelector('.image-status');
@@ -86,12 +119,18 @@
                 async function generateComic() {
                     const text = document.getElementById('novelText').value;
                     const numScenes = document.getElementById('numScenes').value;
+                    const modelName = document.getElementById('modelSelect').value;
                     const resultDiv = document.getElementById('result');
                     
                     resultDiv.innerHTML = '<div class="loading">正在生成中...</div>';
                     
                     try {
-                        const eventSource = new EventSource(`/novel-to-comic-stream?text=${encodeURIComponent(text)}&num_scenes=${numScenes}`);
+                        let url = `/novel-to-comic-stream?text=${encodeURIComponent(text)}&num_scenes=${numScenes}`;
+                        if (modelName) {
+                            url += `&model_name=${encodeURIComponent(modelName)}`;
+                        }
+                        
+                        const eventSource = new EventSource(url);
                         
                         eventSource.onmessage = function(event) {
                             const data = JSON.parse(event.data);

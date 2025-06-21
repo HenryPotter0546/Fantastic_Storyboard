@@ -2,10 +2,11 @@ import os
 import time
 import logging
 import torch
-from diffusers import StableDiffusionPipeline, DPMSolverMultistepScheduler
+from diffusers import StableDiffusionPipeline, DPMSolverMultistepScheduler, StableDiffusionXLPipeline
 from PIL import Image
 import base64
 import io
+import yaml
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -13,25 +14,78 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 class LocalDiffusionService:
-    def __init__(self):
-        self.model_id = os.getenv('DIFFUSION_MODEL_ID', 'runwayml/stable-diffusion-v1-5')
+    def __init__(self, model_name: str = None):
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.pipeline = None
+        
+        # 如果没有指定模型名称，从YAML文件中获取第一个可用的模型
+        if model_name is None:
+            available_models = self._get_available_models_from_config()
+            if available_models:
+                self.model_name = available_models[0]
+                logger.info(f"未指定模型名称，使用默认模型: {self.model_name}")
+            else:
+                raise ValueError("配置文件中没有找到可用的模型")
+        else:
+            self.model_name = model_name
+            
+        self.model_config = self._load_model_config()
         self._load_model()
+        
+    def _load_model_config(self):
+        """从YAML文件加载模型配置"""
+        try:
+            config_path = "config/model.yaml"
+            if not os.path.exists(config_path):
+                raise FileNotFoundError(f"模型配置文件不存在: {config_path}")
+            
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config = yaml.safe_load(f)
+            
+            if self.model_name not in config:
+                available_models = list(config.keys())
+                raise ValueError(f"模型 '{self.model_name}' 不存在。可用模型: {available_models}")
+            
+            model_config = config[self.model_name]
+            logger.info(f"加载模型配置: {self.model_name}")
+            logger.info(f"模型路径: {model_config['path']}")
+            
+            return model_config
+            
+        except Exception as e:
+            logger.error(f"加载模型配置失败: {str(e)}")
+            raise
         
     def _load_model(self):
         """加载diffusion模型"""
         try:
-            logger.info(f"正在加载模型: {self.model_id}")
+            logger.info(f"正在加载模型: {self.model_name}")
             logger.info(f"使用设备: {self.device}")
             
-            # 创建pipeline
-            self.pipeline = StableDiffusionPipeline.from_pretrained(
-                self.model_id,
-                torch_dtype=torch.float16 if self.device == "cuda" else torch.float32,
-                safety_checker=None,
-                requires_safety_checker=False
-            )
+            model_path = self.model_config['path']
+            single_files = self.model_config.get('single_files', False)
+            use_safetensors = self.model_config.get('use_safetensors', True)
+            
+            if single_files:
+                # 加载单个文件模型（如CivitAI模型）
+                logger.info(f"加载单个文件模型: {model_path}")
+                self.pipeline = StableDiffusionPipeline.from_single_file(
+                    model_path,
+                    torch_dtype=torch.float16 if self.device == "cuda" else torch.float32,
+                    safety_checker=None,
+                    requires_safety_checker=False,
+                    use_safetensors=use_safetensors
+                )
+            else:
+                # 加载目录模型
+                logger.info(f"加载目录模型: {model_path}")
+                self.pipeline = StableDiffusionPipeline.from_pretrained(
+                    model_path,
+                    torch_dtype=torch.float16 if self.device == "cuda" else torch.float32,
+                    safety_checker=None,
+                    requires_safety_checker=False,
+                    use_safetensors=use_safetensors
+                )
             
             # 使用更快的scheduler
             self.pipeline.scheduler = DPMSolverMultistepScheduler.from_config(
@@ -51,6 +105,26 @@ class LocalDiffusionService:
         except Exception as e:
             logger.error(f"模型加载失败: {str(e)}")
             raise
+    
+    def _get_available_models_from_config(self):
+        """从配置文件中获取可用的模型列表"""
+        try:
+            config_path = "config/model.yaml"
+            if not os.path.exists(config_path):
+                return []
+            
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config = yaml.safe_load(f)
+            
+            return list(config.keys()) if config else []
+            
+        except Exception as e:
+            logger.error(f"读取配置文件失败: {str(e)}")
+            return []
+    
+    def get_available_models(self):
+        """获取可用的模型列表（公共方法）"""
+        return self._get_available_models_from_config()
     
     def generate_image(self, prompt: str, negative_prompt: str = None) -> str:
         """生成图片并返回base64编码的图片数据"""
@@ -99,7 +173,8 @@ class LocalDiffusionService:
                 "realistic": "photorealistic, highly detailed, professional photography, sharp focus",
                 "artistic": "artistic style, painterly, oil painting, masterpiece, beautiful composition",
                 "cartoon": "cartoon style, cute, colorful, simple lines, friendly",
-                "sketch": "sketch style, pencil drawing, black and white, artistic sketch"
+                "sketch": "sketch style, pencil drawing, black and white, artistic sketch",
+                "pixel": "pixel art style, 8-bit, retro gaming, pixelated, chibi"
             }
             
             style_prompt = style_prompts.get(style, style_prompts["comic"])

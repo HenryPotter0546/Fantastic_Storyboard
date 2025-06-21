@@ -9,6 +9,7 @@ from fastapi.staticfiles import StaticFiles
 import traceback
 import logging
 import json
+import uvicorn
 
 # 配置日志
 logging.basicConfig(level=logging.INFO)
@@ -30,14 +31,32 @@ class SceneResponse(BaseModel):
 async def root():
     return FileResponse("templates/index.html")
 
-async def generate_scenes(text: str, num_scenes: int):
+@app.get("/novel-to-comic-stream")
+async def novel_to_comic_stream(text: str, num_scenes: int = 10, model_name: str = None):
+    return StreamingResponse(
+        generate_scenes(text, num_scenes, model_name),
+        media_type="text/event-stream"
+    )
+
+@app.get("/available-models")
+async def get_available_models():
+    """获取可用的模型列表"""
+    try:
+        diffusion = LocalDiffusionService()
+        models = diffusion.get_available_models()
+        return {"models": models}
+    except Exception as e:
+        logger.error(f"获取可用模型失败: {str(e)}")
+        return {"models": [], "error": str(e)}
+
+async def generate_scenes(text: str, num_scenes: int, model_name: str = None):
     try:
         logger.info("开始处理请求")
         
         # 初始化服务
         logger.info("初始化服务...")
         deepseek = DeepSeekService()
-        diffusion = LocalDiffusionService()
+        diffusion = LocalDiffusionService(model_name)
         
         # 分割场景（得到中文描述）
         logger.info("开始分割场景...")
@@ -73,13 +92,6 @@ async def generate_scenes(text: str, num_scenes: int):
         logger.error(error_msg)
         yield f"data: {json.dumps({'type': 'error', 'message': error_msg})}\n\n"
 
-@app.get("/novel-to-comic-stream")
-async def novel_to_comic_stream(text: str, num_scenes: int = 10):
-    return StreamingResponse(
-        generate_scenes(text, num_scenes),
-        media_type="text/event-stream"
-    )
-
 @app.post("/regenerate-image")
 async def regenerate_image(request: dict):
     try:
@@ -105,6 +117,5 @@ async def regenerate_image(request: dict):
         }
 
 if __name__ == "__main__":
-    import uvicorn
     logger.info("启动服务器...")
     uvicorn.run(app, host="0.0.0.0", port=8000) 
