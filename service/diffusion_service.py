@@ -1,339 +1,140 @@
 import os
 import time
-import requests
 import logging
+import torch
+from diffusers import StableDiffusionPipeline, DPMSolverMultistepScheduler
+from PIL import Image
+import base64
+import io
 from dotenv import load_dotenv
-import aiohttp
-import asyncio
 
 load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-class MidjourneyService:
+class LocalDiffusionService:
     def __init__(self):
-        self.api_url = os.getenv('MIDJOURNEY_API_URL')
-        self.oref = os.getenv('MIDJOURNEY_OREF')
-        self.proxy_url = os.getenv('MIDJOURNEY_PROXY_URL', self.api_url)  # 使用MIDJOURNEY_PROXY_URL或默认使用api_url
-        if not self.api_url or not self.oref:
-            raise ValueError("未设置 MIDJOURNEY_API_URL 或 MIDJOURNEY_OREF 环境变量")
+        self.model_id = os.getenv('DIFFUSION_MODEL_ID', 'runwayml/stable-diffusion-v1-5')
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.pipeline = None
+        self._load_model()
         
-        # 确保proxy_url不以斜杠结尾
-        if self.proxy_url and self.proxy_url.endswith('/'):
-            self.proxy_url = self.proxy_url[:-1]
-            
-        logger.info(f"MidjourneyService initialized with proxy_url: {self.proxy_url}")
-        
-    def generate_image(self, prompt):
-        """生成图片并返回图片URL"""
+    def _load_model(self):
+        """加载diffusion模型"""
         try:
-            # 提交任务
-            logger.info(f"正在提交任务，提示词: {prompt}")
+            logger.info(f"正在加载模型: {self.model_id}")
+            logger.info(f"使用设备: {self.device}")
             
-            # 检查环境变量
-            if not self.api_url or not self.oref:
-                raise ValueError("MIDJOURNEY_API_URL 或 MIDJOURNEY_OREF 环境变量未设置")
+            # 创建pipeline
+            self.pipeline = StableDiffusionPipeline.from_pretrained(
+                self.model_id,
+                torch_dtype=torch.float16 if self.device == "cuda" else torch.float32,
+                safety_checker=None,
+                requires_safety_checker=False
+            )
             
-            # 敏感词替换映射
-            sensitive_word_mapping = {
-                "corpse": "figure",
-                "dead": "lifeless",
-                "blood": "crimson",
-                "bloodshot": "tired",
-                "bloody": "stained",
-                "gore": "darkness",
-                "kill": "defeat",
-                "death": "end",
-                "murder": "conflict",
-                "suicide": "sacrifice",
-                "torture": "suffering",
-                "weapon": "tool",
-                "gun": "device",
-                "knife": "blade",
-                "bomb": "explosive",
-                "drug": "substance",
-                "alcohol": "beverage",
-                "nude": "unclothed",
-                "naked": "bare",
-                "sex": "intimate",
-                "porn": "adult",
-                "explicit": "revealing",
-                "violence": "tension",
-                "violent": "intense",
-                "brutal": "harsh",
-                "cruel": "stern",
-                "horror": "thriller",
-                "scary": "eerie",
-                "terrifying": "intense",
-                "frightening": "dramatic",
-                "gruesome": "dark",
-                "grisly": "somber",
-                "mutilated": "altered",
-                "dismembered": "separated",
-                "decapitated": "severed",
-                "slaughter": "conflict",
-                "massacre": "battle",
-                "carnage": "chaos",
-                "guts": "innards",
-                "flesh": "tissue",
-                "wound": "injury",
-                "scar": "mark",
-                "bleeding": "flowing",
-                "hemorrhage": "flow",
-                "trauma": "injury",
-                "pain": "discomfort",
-                "suffering": "struggle",
-                "agony": "distress",
-                "torment": "trial",
-                "torture": "ordeal",
-                "abuse": "mistreatment",
-                "victim": "target",
-                "perpetrator": "actor",
-                "criminal": "offender",
-                "murderer": "culprit",
-                "killer": "perpetrator",
-                "assassin": "agent",
-                "executioner": "operator",
-                "butcher": "processor",
-                "slayer": "defeater",
-                "destroyer": "eliminator",
-                "annihilator": "remover",
-                "exterminator": "remover",
-                "eliminator": "remover",
-                "terminator": "ender",
-                "destroyer": "remover",
-                "annihilator": "remover",
-                "exterminator": "remover",
-                "eliminator": "remover",
-                "terminator": "ender",
-                "wang": "person",
-                "Wang": "person",
-                "zhang": "person",
-                "Zhang": "person",
-                "li": "person",
-                "Li": "person",
-                "liu": "person",
-                "Liu": "person",
-                "chen": "person",
-                "Chen": "person",
-                "yang": "person",
-                "Yang": "person",
-                "wu": "person",
-                "Wu": "person",
-                "xu": "person",
-                "Xu": "person",
-                "sun": "person",
-                "Sun": "person"
-            }
+            # 使用更快的scheduler
+            self.pipeline.scheduler = DPMSolverMultistepScheduler.from_config(
+                self.pipeline.scheduler.config
+            )
             
-            # 构建请求数据
-            request_data = {
-                "prompt": prompt,
-                "oref": self.oref,
-                "version": 7.0
-            }
+            # 移动到指定设备
+            self.pipeline = self.pipeline.to(self.device)
             
-            # 提交任务，最多重试3次
-            max_submit_retries = 3
-            submit_retry_count = 0
-            task_id = None
-            original_prompt = prompt
+            # 启用内存优化
+            if self.device == "cuda":
+                self.pipeline.enable_attention_slicing()
+                self.pipeline.enable_vae_slicing()
             
-            while submit_retry_count < max_submit_retries:
-                try:
-                    response = requests.post(
-                        f"{self.api_url}/mj/submit/imagine",
-                        json=request_data,
-                        timeout=30  # 设置超时时间
-                    )
-                    
-                    # 记录原始响应
-                    logger.debug(f"提交任务响应状态码: {response.status_code}")
-                    logger.debug(f"提交任务响应内容: {response.text}")
-                    
-                    if response.status_code == 200:
-                        try:
-                            result = response.json()
-                            if 'result' in result and result['result']:
-                                task_id = result['result']
-                                break
-                            else:
-                                # 检查是否包含敏感词
-                                if 'properties' in result and 'bannedWord' in result['properties']:
-                                    banned_word = result['properties']['bannedWord']
-                                    if banned_word in sensitive_word_mapping:
-                                        # 替换敏感词
-                                        new_prompt = original_prompt.replace(banned_word, sensitive_word_mapping[banned_word])
-                                        logger.info(f"检测到敏感词 '{banned_word}'，已替换为 '{sensitive_word_mapping[banned_word]}'")
-                                        request_data['prompt'] = new_prompt
-                                    else:
-                                        # 未知敏感词，默认替换为 person
-                                        new_prompt = original_prompt.replace(banned_word, "person")
-                                        logger.info(f"检测到未知敏感词 '{banned_word}'，已默认替换为 'person'")
-                                        request_data['prompt'] = new_prompt
-                                logger.warning(f"任务ID未返回，响应内容: {response.text}")
-                        except ValueError as e:
-                            logger.error(f"解析响应JSON失败: {str(e)}")
-                    else:
-                        logger.warning(f"提交任务失败，状态码: {response.status_code}, 响应: {response.text}")
-                    
-                except requests.exceptions.RequestException as e:
-                    logger.error(f"请求异常: {str(e)}")
-                
-                submit_retry_count += 1
-                if submit_retry_count < max_submit_retries:
-                    logger.info(f"重试提交任务，第 {submit_retry_count + 1} 次尝试")
-                    time.sleep(2)  # 等待2秒后重试
+            logger.info("模型加载完成")
             
-            if not task_id:
-                raise Exception("无法获取任务ID，请检查API配置和网络连接")
+        except Exception as e:
+            logger.error(f"模型加载失败: {str(e)}")
+            raise
+    
+    def generate_image(self, prompt: str, negative_prompt: str = None) -> str:
+        """生成图片并返回base64编码的图片数据"""
+        try:
+            logger.info(f"开始生成图片，提示词: {prompt}")
             
-            logger.info(f"任务提交成功，任务ID: {task_id}")
+            if not self.pipeline:
+                raise Exception("模型未加载")
             
-            # 等待任务完成
-            max_retries = 30  # 最多等待60秒
-            retry_count = 0
+            # 设置默认的负面提示词
+            if negative_prompt is None:
+                negative_prompt = "low quality, bad quality, sketches, blurry, blur, out of focus, grainy, text, watermark, logo, banner, extra digits, mutated hands, poorly drawn hands, poorly drawn face, mutation, deformed, ugly, disgusting, amputation, extra limbs, extra arms, extra legs, disfigured, gross proportions, malformed limbs, missing arms, missing legs, floating limbs, disconnected limbs, long neck, long body, mutated hands and fingers, out of frame, double, two heads, blurred, ugly, disfigured, too many limbs, deformed, repetitive, black and white, grainy, extra limbs, bad anatomy, high pass filter, airbrush, portrait, zoomed, soft light, smooth skin, closeup, deformed, extra limbs, extra faces, mutated hands, bad anatomy, bad proportions, blind, bad eyes, ugly eyes, dead eyes, blur, vignette, out of shot, out of focus, gaussian, closeup, monochrome, grainy, noisy, text, writing, watermark, logo, overexposed, underexposed, over-saturated, under-saturated"
             
-            while retry_count < max_retries:
-                try:
-                    logger.info(f"正在检查任务状态，第 {retry_count + 1} 次尝试")
-                    response = requests.get(
-                        f"{self.api_url}/mj/task/{task_id}/fetch",
-                        timeout=30  # 设置超时时间
-                    )
-                    
-                    # 记录原始响应
-                    logger.debug(f"获取任务状态响应状态码: {response.status_code}")
-                    logger.debug(f"获取任务状态响应内容: {response.text}")
-                    
-                    if response.status_code == 200:
-                        try:
-                            task_data = response.json()
-                            if task_data['status'] == 'SUCCESS':
-                                logger.info("任务完成，返回图片URL")
-                                return task_data['imageUrl']
-                            elif task_data['status'] == 'FAILURE':
-                                error_msg = task_data.get('failReason', '未知错误')
-                                logger.error(f"任务失败: {error_msg}")
-                                raise Exception(f"任务失败: {error_msg}")
-                            else:
-                                logger.info(f"任务进行中，状态: {task_data.get('status', 'unknown')}")
-                        except ValueError as e:
-                            logger.error(f"解析任务状态失败: {str(e)}")
-                            logger.error(f"响应内容: {response.text}")
-                    else:
-                        logger.warning(f"获取任务状态失败，状态码: {response.status_code}, 响应: {response.text}")
-                    
-                except requests.exceptions.RequestException as e:
-                    logger.error(f"请求异常: {str(e)}")
-                
-                time.sleep(2)  # 等待2秒后再次查询
-                retry_count += 1
+            # 生成图片
+            with torch.no_grad():
+                image = self.pipeline(
+                    prompt=prompt,
+                    negative_prompt=negative_prompt,
+                    num_inference_steps=20,
+                    guidance_scale=7.5,
+                    width=512,
+                    height=512
+                ).images[0]
             
-            raise Exception("任务超时")
+            # 转换为base64
+            buffered = io.BytesIO()
+            image.save(buffered, format="PNG")
+            img_str = base64.b64encode(buffered.getvalue()).decode()
+            
+            # 返回data URL格式
+            image_url = f"data:image/png;base64,{img_str}"
+            
+            logger.info("图片生成完成")
+            return image_url
             
         except Exception as e:
             logger.error(f"生成图片时发生错误: {str(e)}")
-            raise 
-
+            raise
+    
+    def generate_image_with_style(self, prompt: str, style: str = "comic") -> str:
+        """根据风格生成图片"""
+        try:
+            # 根据风格调整提示词
+            style_prompts = {
+                "comic": "comic style, manga style, anime style, vibrant colors, bold lines, dynamic composition",
+                "realistic": "photorealistic, highly detailed, professional photography, sharp focus",
+                "artistic": "artistic style, painterly, oil painting, masterpiece, beautiful composition",
+                "cartoon": "cartoon style, cute, colorful, simple lines, friendly",
+                "sketch": "sketch style, pencil drawing, black and white, artistic sketch"
+            }
+            
+            style_prompt = style_prompts.get(style, style_prompts["comic"])
+            full_prompt = f"{style_prompt}, {prompt}, high quality, detailed"
+            
+            return self.generate_image(full_prompt)
+            
+        except Exception as e:
+            logger.error(f"生成风格化图片时发生错误: {str(e)}")
+            raise
+    
     async def handle_image_action(self, task_id: str, action: str, index: int) -> dict:
         """
-        处理图片操作（放大或变体）
+        处理图片操作（重新生成变体）
         
         Args:
-            task_id: 任务ID
-            action: 操作类型 ('UPSCALE' 或 'VARIATION')
-            index: 图片索引 (1-4)
+            task_id: 任务ID（本地diffusion中不使用）
+            action: 操作类型（本地diffusion中只支持重新生成）
+            index: 图片索引（本地diffusion中不使用）
             
         Returns:
             dict: 包含操作结果的字典
         """
         try:
-            logger.info(f"开始处理图片操作: task_id={task_id}, action={action}, index={index}")
+            logger.info(f"收到图片操作请求: action={action}")
             
-            # 构建请求数据
-            data = {
-                "taskId": task_id,
-                "action": action,
-                "index": index
+            # 本地diffusion不支持upscale和variation，只能重新生成
+            # 这里可以扩展为保存原始prompt并重新生成
+            return {
+                "success": False,
+                "message": "本地diffusion暂不支持图片操作，请重新生成"
             }
             
-            logger.info(f"请求数据: {data}")
-            logger.info(f"请求URL: {self.proxy_url}/submit/change")
-            
-            # 调用midjourney-proxy的API
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    f"{self.proxy_url}/submit/change",
-                    json=data,
-                    headers={"Content-Type": "application/json"}
-                ) as response:
-                    logger.info(f"响应状态码: {response.status}")
-                    response_text = await response.text()
-                    logger.info(f"响应内容: {response_text}")
-                    
-                    try:
-                        result = await response.json()
-                    except Exception as e:
-                        logger.error(f"解析JSON失败: {e}")
-                        return {
-                            "success": False,
-                            "message": f"解析响应失败: {response_text}"
-                        }
-                    
-                    if result.get("code") != 1:
-                        error_msg = result.get("description", "操作失败")
-                        logger.error(f"操作失败: {error_msg}")
-                        return {
-                            "success": False,
-                            "message": error_msg
-                        }
-                    
-                    # 等待新图片生成完成
-                    new_task_id = result.get("result")
-                    if not new_task_id:
-                        logger.error("未获取到新任务ID")
-                        return {
-                            "success": False,
-                            "message": "未获取到新任务ID"
-                        }
-                    
-                    logger.info(f"新任务ID: {new_task_id}")
-                    
-                    # 轮询等待新图片生成完成
-                    max_retries = 30  # 最多等待30秒
-                    for i in range(max_retries):
-                        logger.info(f"检查任务状态，第 {i+1} 次尝试")
-                        async with session.get(f"{self.proxy_url}/task/{new_task_id}/fetch") as task_response:
-                            task_result = await task_response.json()
-                            logger.info(f"任务状态: {task_result}")
-                            
-                            if task_result.get("status") == "SUCCESS":
-                                image_url = task_result.get("imageUrl")
-                                logger.info(f"任务完成，图片URL: {image_url}")
-                                return {
-                                    "success": True,
-                                    "imageUrl": image_url
-                                }
-                            elif task_result.get("status") == "FAILURE":
-                                fail_reason = task_result.get("failReason", "图片生成失败")
-                                logger.error(f"任务失败: {fail_reason}")
-                                return {
-                                    "success": False,
-                                    "message": fail_reason
-                                }
-                        await asyncio.sleep(1)
-                    
-                    logger.error("图片生成超时")
-                    return {
-                        "success": False,
-                        "message": "图片生成超时"
-                    }
-                    
         except Exception as e:
             logger.error(f"处理图片操作失败: {str(e)}")
-            import traceback
-            logger.error(f"详细错误信息: {traceback.format_exc()}")
             return {
                 "success": False,
                 "message": f"处理失败: {str(e)}"

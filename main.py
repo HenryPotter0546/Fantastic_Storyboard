@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from services.deepseek import DeepSeekService
-from services.midjourney import MidjourneyService
+from services.diffusion_service import LocalDiffusionService
 import asyncio
 from typing import List
 from fastapi.responses import HTMLResponse, StreamingResponse
@@ -47,8 +47,7 @@ async def root():
                     padding: 5px 15px;
                     font-size: 14px;
                 }
-                .upscale-btn { background-color: #4CAF50; }
-                .variation-btn { background-color: #2196F3; }
+                .regenerate-btn { background-color: #4CAF50; }
                 .image-container { position: relative; }
                 .image-status { 
                     position: absolute;
@@ -64,7 +63,7 @@ async def root():
         </head>
         <body>
             <div class="container">
-                <h1>小说转漫画服务</h1>
+                <h1>小说转漫画服务 (本地Diffusion)</h1>
                 <div>
                     <textarea id="novelText" placeholder="请输入小说文本..."></textarea>
                     <div>
@@ -77,29 +76,26 @@ async def root():
             </div>
 
             <script>
-                async function handleImageAction(taskId, action, index, sceneIndex) {
+                async function regenerateImage(sceneIndex) {
                     const sceneDiv = document.querySelector(`#scene-${sceneIndex}`);
                     const statusDiv = sceneDiv.querySelector('.image-status');
                     statusDiv.style.display = 'block';
-                    statusDiv.textContent = '处理中...';
+                    statusDiv.textContent = '重新生成中...';
                     
                     try {
-                        const response = await fetch('/image-action', {
+                        const response = await fetch('/regenerate-image', {
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json'
                             },
                             body: JSON.stringify({
-                                taskId: taskId,
-                                action: action,
-                                index: index,
                                 sceneIndex: sceneIndex
                             })
                         });
                         
                         const result = await response.json();
                         if (result.success) {
-                            statusDiv.textContent = '处理成功！';
+                            statusDiv.textContent = '生成成功！';
                             // 更新图片URL
                             const img = sceneDiv.querySelector('img');
                             img.src = result.imageUrl;
@@ -107,7 +103,7 @@ async def root():
                                 statusDiv.style.display = 'none';
                             }, 2000);
                         } else {
-                            statusDiv.textContent = '处理失败：' + result.message;
+                            statusDiv.textContent = '生成失败：' + result.message;
                         }
                     } catch (error) {
                         statusDiv.textContent = '请求失败：' + error.message;
@@ -145,14 +141,7 @@ async def root():
                                         <div class="image-status"></div>
                                     </div>
                                     <div class="image-actions">
-                                        <button class="upscale-btn" onclick="handleImageAction('${data.taskId}', 'UPSCALE', 1, ${data.index})">U1</button>
-                                        <button class="upscale-btn" onclick="handleImageAction('${data.taskId}', 'UPSCALE', 2, ${data.index})">U2</button>
-                                        <button class="upscale-btn" onclick="handleImageAction('${data.taskId}', 'UPSCALE', 3, ${data.index})">U3</button>
-                                        <button class="upscale-btn" onclick="handleImageAction('${data.taskId}', 'UPSCALE', 4, ${data.index})">U4</button>
-                                        <button class="variation-btn" onclick="handleImageAction('${data.taskId}', 'VARIATION', 1, ${data.index})">V1</button>
-                                        <button class="variation-btn" onclick="handleImageAction('${data.taskId}', 'VARIATION', 2, ${data.index})">V2</button>
-                                        <button class="variation-btn" onclick="handleImageAction('${data.taskId}', 'VARIATION', 3, ${data.index})">V3</button>
-                                        <button class="variation-btn" onclick="handleImageAction('${data.taskId}', 'VARIATION', 4, ${data.index})">V4</button>
+                                        <button class="regenerate-btn" onclick="regenerateImage(${data.index})">重新生成</button>
                                     </div>
                                 `;
                                 
@@ -199,7 +188,7 @@ async def generate_scenes(text: str, num_scenes: int):
         # 初始化服务
         logger.info("初始化服务...")
         deepseek = DeepSeekService()
-        midjourney = MidjourneyService()
+        diffusion = LocalDiffusionService()
         
         # 分割场景（得到中文描述）
         logger.info("开始分割场景...")
@@ -214,12 +203,12 @@ async def generate_scenes(text: str, num_scenes: int):
                 # 将中文场景描述翻译成英文prompt
                 english_prompt = deepseek.translate_to_english(scene_cn)
                 logger.info(f"场景翻译完成: {english_prompt}")
-                # 构建适合Midjourney的英文提示词
+                # 构建适合本地diffusion的英文提示词
                 prompt = f"comic style, {english_prompt}, detailed, high quality"
                 logger.info(f"生成提示词: {prompt}")
                 # 生成图片
-                image_url = midjourney.generate_image(prompt)
-                logger.info(f"图片生成完成: {image_url}")
+                image_url = diffusion.generate_image_with_style(prompt, "comic")
+                logger.info(f"图片生成完成")
                 # 只发送中文描述
                 yield f"data: {json.dumps({'type': 'scene', 'index': i, 'description': scene_cn, 'image_url': image_url})}\n\n"
             except Exception as e:
@@ -242,38 +231,25 @@ async def novel_to_comic_stream(text: str, num_scenes: int = 10):
         media_type="text/event-stream"
     )
 
-@app.post("/image-action")
-async def handle_image_action(request: dict):
+@app.post("/regenerate-image")
+async def regenerate_image(request: dict):
     try:
-        task_id = request.get("taskId")
-        action = request.get("action")
-        index = request.get("index")
         scene_index = request.get("sceneIndex")
         
-        logger.info(f"收到图片操作请求: task_id={task_id}, action={action}, index={index}, scene_index={scene_index}")
+        logger.info(f"收到重新生成图片请求: scene_index={scene_index}")
         
-        if not all([task_id, action, index, scene_index is not None]):
-            logger.error(f"缺少必要参数: task_id={task_id}, action={action}, index={index}, scene_index={scene_index}")
-            raise HTTPException(status_code=400, detail="Missing required parameters")
+        if scene_index is None:
+            raise HTTPException(status_code=400, detail="Missing scene_index parameter")
             
-        # 调用Midjourney服务处理图片
-        midjourney = MidjourneyService()
-        result = await midjourney.handle_image_action(task_id, action, index)
-        
-        logger.info(f"图片操作结果: {result}")
-        
-        if not result.get("success"):
-            raise HTTPException(status_code=400, detail=result.get("message", "处理失败"))
-            
+        # 这里可以实现重新生成逻辑
+        # 暂时返回错误信息
         return {
-            "success": True,
-            "imageUrl": result.get("imageUrl")
+            "success": False,
+            "message": "重新生成功能暂未实现"
         }
         
     except Exception as e:
-        logger.error(f"处理图片操作失败: {str(e)}")
-        import traceback
-        logger.error(f"详细错误信息: {traceback.format_exc()}")
+        logger.error(f"重新生成图片失败: {str(e)}")
         return {
             "success": False,
             "message": str(e)
