@@ -9,3 +9,4 @@ transformers==4.36.0
 Pillow==10.1.0
 accelerate==0.26.0
 PyYAML==6.0.1 
+huggingface_hub==0.19.4

@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from services.deepseek import DeepSeekService
-from services.diffusion_service import LocalDiffusionService
+from service.deepseek_service import DeepSeekService
+from service.diffusion_service import LocalDiffusionService
 import asyncio
 from typing import List
 from fastapi.responses import HTMLResponse, StreamingResponse, FileResponse
