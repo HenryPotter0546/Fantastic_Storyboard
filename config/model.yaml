@@ -1,6 +1,6 @@
 Pixel_style: 
-  path: "/home/henry/workspace/model_checkpoint/pixel_style_sdxl/192.safetensors"
-  single_files: true   ### if true, is a civitai model
+  path: "/home/henry/workspace/model_checkpoint/pixel_style_sdxl/1552.safetensors"
+  single_files: true    ### if true, is a civitai model
   use_safetensors: true
   type: "sdxl"
 
