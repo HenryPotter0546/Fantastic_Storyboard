@@ -67,6 +67,10 @@ Unstable:
 5. 点击"生成漫画"按钮
 6. 等待图片生成完成
 
+## 运行示例
+
+![运行示例](screenshots/example_one.png)
+
 ## 技术架构
 
 - **后端**: FastAPI
