@@ -48,21 +48,24 @@ python main.py
 在`.env`文件中配置以下变量：
 
 - `DEEPSEEK_API_KEY`: DeepSeek API密钥（用于文本处理和翻译）
-- `DIFFUSION_MODEL_ID`: 要使用的Diffusion模型ID（可选，默认为runwayml/stable-diffusion-v1-5）
 
-## 支持的模型
 
-- `runwayml/stable-diffusion-v1-5` (默认)
-- `CompVis/stable-diffusion-v1-4`
-- `stabilityai/stable-diffusion-2-1`
-
+在`model.yaml`文件中配置好本地模型的路经，例如：
+```bash
+Unstable:
+  path: "/home/henry/workspace/model_checkpoint/unstable_sdxl"
+  single_files: false
+  use_safetensors: false
+  type: "sdxl"
+```
 ## 使用方法
 
 1. 打开浏览器访问 http://localhost:8000
 2. 在文本框中输入小说内容
 3. 设置要生成的场景数量（1-20）
-4. 点击"生成漫画"按钮
-5. 等待图片生成完成
+4. 选择模型（最好选unstable）
+5. 点击"生成漫画"按钮
+6. 等待图片生成完成
 
 ## 技术架构
 
