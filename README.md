@@ -21,7 +21,7 @@
 
 1. 克隆项目
 ```bash
-git clone <repository-url>
+https://github.com/HenryPotter0546/cs_group_project.git
 cd cs_group_project
 ```
 
@@ -32,7 +32,7 @@ pip install -r requirements.txt
 
 3. 配置环境变量
 ```bash
-cp env.example .env
+.env
 # 编辑.env文件，填入你的DeepSeek API密钥
 ```
 
@@ -87,3 +87,4 @@ python main.py
 ## 许可证
 
 MIT License
+商用请联系henrypotterheng@gmail.com
