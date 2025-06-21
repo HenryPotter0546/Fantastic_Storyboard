@@ -84,7 +84,11 @@ python main.py
 2. **模型下载失败**: 检查网络连接，或手动下载模型
 3. **API调用失败**: 检查DeepSeek API密钥是否正确
 
+## 贡献者
+
+Weiheng Li, Sheng Wang, Jingwei Zeng, Xiaoyu Zhuang, Yihao Wang
+
 ## 许可证
 
 MIT License
-商用请联系henrypotterheng@gmail.com
+如需商用请联系henrypotterheng@gmail.com
