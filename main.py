@@ -19,6 +19,9 @@ app = FastAPI(title="小说转漫画API")
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
+# 创建全局的diffusion服务实例
+diffusion_service = LocalDiffusionService()
+
 class NovelRequest(BaseModel):
     text: str
     num_scenes: int = 10
@@ -31,32 +34,52 @@ class SceneResponse(BaseModel):
 async def root():
     return FileResponse("templates/index.html")
 
-@app.get("/novel-to-comic-stream")
-async def novel_to_comic_stream(text: str, num_scenes: int = 10, model_name: str = None):
-    return StreamingResponse(
-        generate_scenes(text, num_scenes, model_name),
-        media_type="text/event-stream"
-    )
-
 @app.get("/available-models")
 async def get_available_models():
     """获取可用的模型列表"""
     try:
-        diffusion = LocalDiffusionService()
-        models = diffusion.get_available_models()
+        models = diffusion_service.get_available_models()
         return {"models": models}
     except Exception as e:
         logger.error(f"获取可用模型失败: {str(e)}")
         return {"models": [], "error": str(e)}
 
-async def generate_scenes(text: str, num_scenes: int, model_name: str = None):
+@app.post("/set-model")
+async def set_model(request: dict):
+    """设置要使用的模型"""
+    try:
+        model_name = request.get("model_name")
+        if not model_name:
+            raise HTTPException(status_code=400, detail="Missing model_name parameter")
+        
+        diffusion_service.set_model(model_name)
+        return {"success": True, "message": f"模型已设置为: {model_name}"}
+        
+    except Exception as e:
+        logger.error(f"设置模型失败: {str(e)}")
+        return {"success": False, "message": str(e)}
+
+@app.get("/novel-to-comic-stream")
+async def novel_to_comic_stream(text: str, num_scenes: int = 10):
+    return StreamingResponse(
+        generate_scenes(text, num_scenes),
+        media_type="text/event-stream"
+    )
+
+async def generate_scenes(text: str, num_scenes: int):
     try:
         logger.info("开始处理请求")
         
         # 初始化服务
         logger.info("初始化服务...")
         deepseek = DeepSeekService()
-        diffusion = LocalDiffusionService(model_name)
+        
+        # 检查是否已设置模型
+        if diffusion_service.model_name is None:
+            error_msg = "请先选择模型"
+            logger.error(error_msg)
+            yield f"data: {json.dumps({'type': 'error', 'message': error_msg})}\n\n"
+            return
         
         # 分割场景（得到中文描述）
         logger.info("开始分割场景...")
@@ -75,7 +98,7 @@ async def generate_scenes(text: str, num_scenes: int, model_name: str = None):
                 prompt = f"comic style, {english_prompt}, detailed, high quality"
                 logger.info(f"生成提示词: {prompt}")
                 # 生成图片
-                image_url = diffusion.generate_image_with_style(prompt, "comic")
+                image_url = diffusion_service.generate_image_with_style(prompt, "comic")
                 logger.info(f"图片生成完成")
                 # 只发送中文描述
                 yield f"data: {json.dumps({'type': 'scene', 'index': i, 'description': scene_cn, 'image_url': image_url})}\n\n"

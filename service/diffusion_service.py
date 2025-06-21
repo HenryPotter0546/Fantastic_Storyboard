@@ -15,32 +15,50 @@ logger = logging.getLogger(__name__)
 
 class LocalDiffusionService:
     def __init__(self, model_name: str = None):
+        self.model_name = model_name
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.pipeline = None
+        self.model_config = None
         
-        # 如果没有指定模型名称，从YAML文件中获取第一个可用的模型
-        if model_name is None:
-            available_models = self._get_available_models_from_config()
-            if available_models:
-                self.model_name = available_models[0]
-                logger.info(f"未指定模型名称，使用默认模型: {self.model_name}")
-            else:
-                raise ValueError("配置文件中没有找到可用的模型")
-        else:
+        # 如果指定了模型名称，立即加载配置
+        if model_name:
+            self.model_config = self._load_model_config()
+    
+    def set_model(self, model_name: str):
+        """设置要使用的模型"""
+        try:
             self.model_name = model_name
-            
-        self.model_config = self._load_model_config()
-        self._load_model()
-        
+            self.model_config = self._load_model_config()
+            # 清除之前加载的模型
+            self.pipeline = None
+            logger.info(f"模型已设置为: {model_name}")
+        except Exception as e:
+            logger.error(f"设置模型失败: {str(e)}")
+            raise
+    
+    def _ensure_model_loaded(self):
+        """确保模型已加载"""
+        if self.pipeline is None:
+            if self.model_name is None:
+                raise ValueError("未设置模型名称，请先调用 set_model() 方法")
+            self._load_model()
+    
     def _load_model_config(self):
         """从YAML文件加载模型配置"""
         try:
             config_path = "config/model.yaml"
+            logger.info(f"尝试读取配置文件: {config_path}")
+            
             if not os.path.exists(config_path):
                 raise FileNotFoundError(f"模型配置文件不存在: {config_path}")
             
             with open(config_path, 'r', encoding='utf-8') as f:
                 config = yaml.safe_load(f)
+            
+            logger.info(f"成功读取配置文件，包含模型: {list(config.keys()) if config else '无'}")
+            
+            if not config:
+                raise ValueError("配置文件为空")
             
             if self.model_name not in config:
                 available_models = list(config.keys())
@@ -49,11 +67,14 @@ class LocalDiffusionService:
             model_config = config[self.model_name]
             logger.info(f"加载模型配置: {self.model_name}")
             logger.info(f"模型路径: {model_config['path']}")
+            logger.info(f"完整配置: {model_config}")
             
             return model_config
             
         except Exception as e:
             logger.error(f"加载模型配置失败: {str(e)}")
+            import traceback
+            logger.error(f"详细错误信息: {traceback.format_exc()}")
             raise
         
     def _load_model(self):
@@ -65,27 +86,57 @@ class LocalDiffusionService:
             model_path = self.model_config['path']
             single_files = self.model_config.get('single_files', False)
             use_safetensors = self.model_config.get('use_safetensors', True)
+            model_type = self.model_config.get('type', 'sd')  # 默认为SD模型
             
-            if single_files:
-                # 加载单个文件模型（如CivitAI模型）
-                logger.info(f"加载单个文件模型: {model_path}")
-                self.pipeline = StableDiffusionPipeline.from_single_file(
-                    model_path,
-                    torch_dtype=torch.float16 if self.device == "cuda" else torch.float32,
-                    safety_checker=None,
-                    requires_safety_checker=False,
-                    use_safetensors=use_safetensors
-                )
+            logger.info(f"模型路径: {model_path}")
+            logger.info(f"模型类型: {model_type}")
+            logger.info(f"单文件模式: {single_files}")
+            logger.info(f"使用safetensors: {use_safetensors}")
+            
+            if model_type.lower() == 'sdxl':
+                # 加载SDXL模型
+                if single_files:
+                    logger.info(f"加载SDXL单文件模型: {model_path}")
+                    self.pipeline = StableDiffusionXLPipeline.from_single_file(
+                        model_path,
+                        torch_dtype=torch.float16 if self.device == "cuda" else torch.float32,
+                        safety_checker=None,
+                        requires_safety_checker=False,
+                        use_safetensors=use_safetensors,
+                        local_files_only=False  # 允许下载必要的文件
+                    )
+                else:
+                    logger.info(f"加载SDXL目录模型: {model_path}")
+                    self.pipeline = StableDiffusionXLPipeline.from_pretrained(
+                        model_path,
+                        torch_dtype=torch.float16 if self.device == "cuda" else torch.float32,
+                        safety_checker=None,
+                        requires_safety_checker=False,
+                        use_safetensors=use_safetensors,
+                        local_files_only=False  # 允许下载必要的文件
+                    )
             else:
-                # 加载目录模型
-                logger.info(f"加载目录模型: {model_path}")
-                self.pipeline = StableDiffusionPipeline.from_pretrained(
-                    model_path,
-                    torch_dtype=torch.float16 if self.device == "cuda" else torch.float32,
-                    safety_checker=None,
-                    requires_safety_checker=False,
-                    use_safetensors=use_safetensors
-                )
+                # 加载标准SD模型
+                if single_files:
+                    logger.info(f"加载SD单文件模型: {model_path}")
+                    self.pipeline = StableDiffusionPipeline.from_single_file(
+                        model_path,
+                        torch_dtype=torch.float16 if self.device == "cuda" else torch.float32,
+                        safety_checker=None,
+                        requires_safety_checker=False,
+                        use_safetensors=use_safetensors,
+                        local_files_only=False  # 允许下载必要的文件
+                    )
+                else:
+                    logger.info(f"加载SD目录模型: {model_path}")
+                    self.pipeline = StableDiffusionPipeline.from_pretrained(
+                        model_path,
+                        torch_dtype=torch.float16 if self.device == "cuda" else torch.float32,
+                        safety_checker=None,
+                        requires_safety_checker=False,
+                        use_safetensors=use_safetensors,
+                        local_files_only=False  # 允许下载必要的文件
+                    )
             
             # 使用更快的scheduler
             self.pipeline.scheduler = DPMSolverMultistepScheduler.from_config(
@@ -104,22 +155,35 @@ class LocalDiffusionService:
             
         except Exception as e:
             logger.error(f"模型加载失败: {str(e)}")
+            import traceback
+            logger.error(f"详细错误信息: {traceback.format_exc()}")
             raise
     
     def _get_available_models_from_config(self):
         """从配置文件中获取可用的模型列表"""
         try:
             config_path = "config/model.yaml"
+            logger.info(f"尝试读取配置文件获取可用模型: {config_path}")
+            
             if not os.path.exists(config_path):
+                logger.error(f"配置文件不存在: {config_path}")
                 return []
             
             with open(config_path, 'r', encoding='utf-8') as f:
                 config = yaml.safe_load(f)
             
-            return list(config.keys()) if config else []
+            if not config:
+                logger.warning("配置文件为空")
+                return []
+            
+            models = list(config.keys())
+            logger.info(f"从配置文件中读取到 {len(models)} 个模型: {models}")
+            return models
             
         except Exception as e:
             logger.error(f"读取配置文件失败: {str(e)}")
+            import traceback
+            logger.error(f"详细错误信息: {traceback.format_exc()}")
             return []
     
     def get_available_models(self):
@@ -131,8 +195,7 @@ class LocalDiffusionService:
         try:
             logger.info(f"开始生成图片，提示词: {prompt}")
             
-            if not self.pipeline:
-                raise Exception("模型未加载")
+            self._ensure_model_loaded()
             
             # 设置默认的负面提示词
             if negative_prompt is None:

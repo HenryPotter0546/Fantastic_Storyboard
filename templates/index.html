@@ -55,6 +55,8 @@
             </div>
 
             <script>
+                let selectedModel = null;
+                
                 // 页面加载时获取可用模型列表
                 window.addEventListener('load', async function() {
                     try {
@@ -65,6 +67,12 @@
                         modelSelect.innerHTML = '';
                         
                         if (data.models && data.models.length > 0) {
+                            // 添加默认选项
+                            const defaultOption = document.createElement('option');
+                            defaultOption.value = '';
+                            defaultOption.textContent = '请选择模型';
+                            modelSelect.appendChild(defaultOption);
+                            
                             data.models.forEach(model => {
                                 const option = document.createElement('option');
                                 option.value = model;
@@ -79,6 +87,36 @@
                         }
                     } catch (error) {
                         console.error('获取模型列表失败:', error);
+                    }
+                });
+
+                // 模型选择变化时设置模型
+                document.getElementById('modelSelect').addEventListener('change', async function() {
+                    const modelName = this.value;
+                    if (modelName) {
+                        try {
+                            const response = await fetch('/set-model', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json'
+                                },
+                                body: JSON.stringify({
+                                    model_name: modelName
+                                })
+                            });
+                            
+                            const result = await response.json();
+                            if (result.success) {
+                                selectedModel = modelName;
+                                console.log('模型设置成功:', modelName);
+                            } else {
+                                console.error('模型设置失败:', result.message);
+                                alert('模型设置失败: ' + result.message);
+                            }
+                        } catch (error) {
+                            console.error('设置模型请求失败:', error);
+                            alert('设置模型失败: ' + error.message);
+                        }
                     }
                 });
 
@@ -119,17 +157,24 @@
                 async function generateComic() {
                     const text = document.getElementById('novelText').value;
                     const numScenes = document.getElementById('numScenes').value;
-                    const modelName = document.getElementById('modelSelect').value;
                     const resultDiv = document.getElementById('result');
+                    
+                    // 检查是否选择了模型
+                    if (!selectedModel) {
+                        alert('请先选择模型');
+                        return;
+                    }
+                    
+                    // 检查是否输入了文本
+                    if (!text.trim()) {
+                        alert('请输入小说文本');
+                        return;
+                    }
                     
                     resultDiv.innerHTML = '<div class="loading">正在生成中...</div>';
                     
                     try {
-                        let url = `/novel-to-comic-stream?text=${encodeURIComponent(text)}&num_scenes=${numScenes}`;
-                        if (modelName) {
-                            url += `&model_name=${encodeURIComponent(modelName)}`;
-                        }
-                        
+                        const url = `/novel-to-comic-stream?text=${encodeURIComponent(text)}&num_scenes=${numScenes}`;
                         const eventSource = new EventSource(url);
                         
                         eventSource.onmessage = function(event) {
