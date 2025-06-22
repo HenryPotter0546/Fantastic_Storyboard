@@ -327,7 +327,7 @@ class LocalDiffusionService:
                 "message": f"处理失败: {str(e)}"
             }
 
-    def create_video_from_images(self, image_paths: List[str], output_path: str, fps: int = 2):
+    def create_video_from_images(self, image_paths: List[str], output_path: str, fps: float = 0.5):
         """将图片拼接成视频"""
         try:
             if not image_paths:
