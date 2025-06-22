@@ -129,11 +129,11 @@ async def novel_to_comic_stream(text: str, num_scenes: int = 10):
 
 
 async def generate_scenes(text: str, num_scenes: int):
+    session_id = str(uuid.uuid4())
     try:
-        logger.info("开始处理请求")
+        logger.info(f"开始处理请求，会话ID: {session_id}")
         
         # 创建一个临时目录来存放生成的图片
-        session_id = str(uuid.uuid4())
         temp_dir = os.path.join("temp", session_id)
         if not os.path.exists(temp_dir):
             os.makedirs(temp_dir)
@@ -185,34 +185,12 @@ async def generate_scenes(text: str, num_scenes: int):
                 logger.error(error_msg)
                 yield f"data: {json.dumps({'type': 'scene_error', 'index': i, 'message': error_msg})}\n\n"
         
-        # 生成视频
-        video_path = None
-        if image_paths:
-            try:
-                logger.info("开始生成视频...")
-                video_output_dir = os.path.join("static", "videos")
-                if not os.path.exists(video_output_dir):
-                    os.makedirs(video_output_dir)
-                
-                video_path = os.path.join(video_output_dir, f"{session_id}.mp4")
-                diffusion_service.create_video_from_images(image_paths, video_path)
-                logger.info(f"视频生成成功: {video_path}")
-                
-                yield f"data: {json.dumps({'type': 'video', 'video_url': f'/static/videos/{session_id}.mp4'})}\n\n"
-                
-            except Exception as e:
-                error_msg = f"视频生成失败: {str(e)}"
-                logger.error(error_msg)
-                yield f"data: {json.dumps({'type': 'error', 'message': error_msg})}\n\n"
+        # 发送图片生成完成的消息，并包含会话ID
+        yield f"data: {json.dumps({'type': 'all_images_generated', 'session_id': session_id})}\n\n"
         
-        # 清理临时文件
-        if os.path.exists(temp_dir):
-            shutil.rmtree(temp_dir)
-            logger.info(f"已清理临时目录: {temp_dir}")
-            
-        # 发送完成消息
+        # 发送完成消息，以便前端正常关闭连接
         yield f"data: {json.dumps({'type': 'complete'})}\n\n"
-        
+            
     except Exception as e:
         error_msg = f"错误: {str(e)}\n{traceback.format_exc()}"
         logger.error(error_msg)
@@ -248,6 +226,47 @@ async def regenerate_image(request: dict):
 async def get_video_page():
     """获取视频播放页面"""
     return FileResponse("templates/video.html")
+
+
+@app.post("/create-video")
+async def create_video(request: dict):
+    """根据会话ID创建视频"""
+    try:
+        session_id = request.get("session_id")
+        if not session_id:
+            raise HTTPException(status_code=400, detail="Missing session_id parameter")
+        
+        logger.info(f"开始创建视频，会话ID: {session_id}")
+        
+        temp_dir = os.path.join("temp", session_id)
+        if not os.path.exists(temp_dir):
+            raise HTTPException(status_code=404, detail="Session not found")
+        
+        image_paths = sorted([os.path.join(temp_dir, f) for f in os.listdir(temp_dir) if f.endswith(".png")])
+        
+        if not image_paths:
+            raise HTTPException(status_code=400, detail="No images found for this session")
+        
+        # 生成视频
+        video_output_dir = os.path.join("static", "videos")
+        if not os.path.exists(video_output_dir):
+            os.makedirs(video_output_dir)
+        
+        video_path = os.path.join(video_output_dir, f"{session_id}.mp4")
+        diffusion_service.create_video_from_images(image_paths, video_path)
+        logger.info(f"视频生成成功: {video_path}")
+        
+        # 清理临时文件
+        shutil.rmtree(temp_dir)
+        logger.info(f"已清理临时目录: {temp_dir}")
+        
+        return {"success": True, "video_url": f"/static/videos/{session_id}.mp4"}
+        
+    except Exception as e:
+        logger.error(f"创建视频失败: {str(e)}")
+        import traceback
+        logger.error(f"详细错误信息: {traceback.format_exc()}")
+        return {"success": False, "message": str(e)}
 
 
 if __name__ == "__main__":
