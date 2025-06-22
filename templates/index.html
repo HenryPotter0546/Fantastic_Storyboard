@@ -600,18 +600,54 @@
                     resultDiv.appendChild(sceneDiv);
                 }
 
-                if (data.type === 'video') {
-                    // 创建视频播放链接
-                    const videoLink = document.createElement('a');
-                    videoLink.href = `/video?video_url=${data.video_url}`;
-                    videoLink.textContent = '观看生成的视频';
-                    videoLink.target = '_blank';
-                    videoLink.style.display = 'block';
-                    videoLink.style.marginTop = '20px';
-                    videoLink.style.fontSize = '18px';
-                    videoLink.style.fontWeight = 'bold';
+                if (data.type === 'all_images_generated') {
+                    // 创建"生成视频"按钮
+                    const createVideoBtn = document.createElement('button');
+                    createVideoBtn.textContent = '开始生成视频';
+                    createVideoBtn.style.marginTop = '20px';
+                    createVideoBtn.onclick = async function() {
+                        createVideoBtn.textContent = '视频生成中...';
+                        createVideoBtn.disabled = true;
+                        
+                        try {
+                            const response = await fetch('/create-video', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json'
+                                },
+                                body: JSON.stringify({
+                                    session_id: data.session_id
+                                })
+                            });
+                            
+                            const result = await response.json();
+                            if (result.success) {
+                                // 创建视频播放链接
+                                const videoLink = document.createElement('a');
+                                videoLink.href = `/video?video_url=${result.video_url}`;
+                                videoLink.textContent = '观看生成的视频';
+                                videoLink.target = '_blank';
+                                videoLink.style.display = 'block';
+                                videoLink.style.marginTop = '20px';
+                                videoLink.style.fontSize = '18px';
+                                videoLink.style.fontWeight = 'bold';
+                                
+                                // 移除按钮并显示链接
+                                createVideoBtn.remove();
+                                resultDiv.appendChild(videoLink);
+                            } else {
+                                alert('视频生成失败: ' + result.message);
+                                createVideoBtn.textContent = '开始生成视频';
+                                createVideoBtn.disabled = false;
+                            }
+                        } catch (error) {
+                            alert('视频生成请求失败: ' + error.message);
+                            createVideoBtn.textContent = '开始生成视频';
+                            createVideoBtn.disabled = false;
+                        }
+                    };
                     
-                    resultDiv.appendChild(videoLink);
+                    resultDiv.appendChild(createVideoBtn);
                 }
 
                 if (data.type === 'scene_error') {
