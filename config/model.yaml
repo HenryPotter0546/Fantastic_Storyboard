@@ -16,3 +16,9 @@ Unstable:
   single_files: false
   use_safetensors: false
   type: "sdxl"
+
+Pixel_style1:
+  path: "D:/sdpy/model/AnythingXL_xl.safetensors"
+  single_files: true    ### if true, is a civitai model
+  use_safetensors: true
+  type: "sdxl"
