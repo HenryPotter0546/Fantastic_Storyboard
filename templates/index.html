@@ -600,6 +600,20 @@
                     resultDiv.appendChild(sceneDiv);
                 }
 
+                if (data.type === 'video') {
+                    // 创建视频播放链接
+                    const videoLink = document.createElement('a');
+                    videoLink.href = `/video?video_url=${data.video_url}`;
+                    videoLink.textContent = '观看生成的视频';
+                    videoLink.target = '_blank';
+                    videoLink.style.display = 'block';
+                    videoLink.style.marginTop = '20px';
+                    videoLink.style.fontSize = '18px';
+                    videoLink.style.fontWeight = 'bold';
+                    
+                    resultDiv.appendChild(videoLink);
+                }
+
                 if (data.type === 'scene_error') {
                     const errorDiv = document.createElement('div');
                     errorDiv.className = 'scene error';
