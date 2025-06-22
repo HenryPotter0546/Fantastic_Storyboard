@@ -214,4 +214,4 @@ async def regenerate_image(request: dict):
 
 if __name__ == "__main__":
     logger.info("启动服务器...")
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="localhost", port=8000)
