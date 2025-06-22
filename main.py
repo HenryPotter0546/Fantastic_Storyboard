@@ -22,17 +22,21 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 # 创建全局的diffusion服务实例
 diffusion_service = LocalDiffusionService()
 
+
 class NovelRequest(BaseModel):
     text: str
     num_scenes: int = 10
+
 
 class SceneResponse(BaseModel):
     description: str
     image_url: str
 
+
 @app.get("/", response_class=HTMLResponse)
 async def root():
     return FileResponse("templates/index.html")
+
 
 @app.get("/available-models")
 async def get_available_models():
@@ -44,20 +48,73 @@ async def get_available_models():
         logger.error(f"获取可用模型失败: {str(e)}")
         return {"models": [], "error": str(e)}
 
+
 @app.post("/set-model")
 async def set_model(request: dict):
-    """设置要使用的模型"""
+    """设置要使用的模型（不立即加载）"""
     try:
         model_name = request.get("model_name")
         if not model_name:
             raise HTTPException(status_code=400, detail="Missing model_name parameter")
-        
+
         diffusion_service.set_model(model_name)
         return {"success": True, "message": f"模型已设置为: {model_name}"}
-        
+
     except Exception as e:
         logger.error(f"设置模型失败: {str(e)}")
         return {"success": False, "message": str(e)}
+
+
+@app.post("/load-model")
+async def load_model():
+    """预加载当前设置的模型"""
+    try:
+        if diffusion_service.model_name is None:
+            raise HTTPException(status_code=400, detail="请先选择模型")
+
+        logger.info(f"开始预加载模型: {diffusion_service.model_name}")
+
+        # 在后台线程中加载模型，避免阻塞
+        def load_model_sync():
+            try:
+                diffusion_service.preload_model()
+                return True
+            except Exception as e:
+                logger.error(f"模型加载失败: {str(e)}")
+                return False
+
+        # 使用线程池执行模型加载
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            future = executor.submit(load_model_sync)
+            success = future.result(timeout=300)  # 5分钟超时
+
+        if success:
+            return {"success": True, "message": f"模型 {diffusion_service.model_name} 加载完成"}
+        else:
+            return {"success": False, "message": "模型加载失败，请查看日志"}
+
+    except Exception as e:
+        logger.error(f"预加载模型失败: {str(e)}")
+        return {"success": False, "message": str(e)}
+
+
+@app.get("/model-status")
+async def get_model_status():
+    """获取模型加载状态"""
+    try:
+        is_loaded = diffusion_service.is_model_loaded()
+        current_model = diffusion_service.model_name
+
+        return {
+            "is_loaded": is_loaded,
+            "current_model": current_model,
+            "message": f"模型 {current_model} 已加载" if is_loaded and current_model else "未加载模型"
+        }
+    except Exception as e:
+        logger.error(f"获取模型状态失败: {str(e)}")
+        return {"is_loaded": False, "current_model": None, "message": str(e)}
+
 
 @app.get("/novel-to-comic-stream")
 async def novel_to_comic_stream(text: str, num_scenes: int = 10):
@@ -66,30 +123,44 @@ async def novel_to_comic_stream(text: str, num_scenes: int = 10):
         media_type="text/event-stream"
     )
 
+
 async def generate_scenes(text: str, num_scenes: int):
     try:
         logger.info("开始处理请求")
-        
+
         # 初始化服务
         logger.info("初始化服务...")
         deepseek = DeepSeekService()
-        
+
         # 检查是否已设置模型
         if diffusion_service.model_name is None:
             error_msg = "请先选择模型"
             logger.error(error_msg)
             yield f"data: {json.dumps({'type': 'error', 'message': error_msg})}\n\n"
             return
-        
+
+        # 检查模型是否已加载，如果没有则自动加载
+        if not diffusion_service.is_model_loaded():
+            logger.info("模型未加载，开始自动加载...")
+            yield f"data: {json.dumps({'type': 'info', 'message': '模型未加载，正在自动加载中...'})}\n\n"
+            try:
+                diffusion_service.preload_model()
+                yield f"data: {json.dumps({'type': 'info', 'message': '模型加载完成，开始生成...'})}\n\n"
+            except Exception as e:
+                error_msg = f"模型加载失败: {str(e)}"
+                logger.error(error_msg)
+                yield f"data: {json.dumps({'type': 'error', 'message': error_msg})}\n\n"
+                return
+
         # 分割场景（得到中文描述）
         logger.info("开始分割场景...")
         scenes_cn = deepseek.split_into_scenes_cn(text, num_scenes)
         logger.info(f"场景分割完成，共 {len(scenes_cn)} 个场景")
-        
+
         # 为每个场景生成图片
         logger.info("开始生成图片...")
         for i, scene_cn in enumerate(scenes_cn):
-            logger.info(f"处理第 {i+1}/{len(scenes_cn)} 个场景")
+            logger.info(f"处理第 {i + 1}/{len(scenes_cn)} 个场景")
             try:
                 # 将中文场景描述翻译成英文prompt
                 english_prompt = deepseek.translate_to_english(scene_cn)
@@ -103,35 +174,36 @@ async def generate_scenes(text: str, num_scenes: int):
                 # 只发送中文描述
                 yield f"data: {json.dumps({'type': 'scene', 'index': i, 'description': scene_cn, 'image_url': image_url})}\n\n"
             except Exception as e:
-                error_msg = f"场景 {i+1} 生成失败: {str(e)}"
+                error_msg = f"场景 {i + 1} 生成失败: {str(e)}"
                 logger.error(error_msg)
                 yield f"data: {json.dumps({'type': 'scene_error', 'index': i, 'message': error_msg})}\n\n"
-            
+
         # 发送完成消息
         yield f"data: {json.dumps({'type': 'complete'})}\n\n"
-        
+
     except Exception as e:
         error_msg = f"错误: {str(e)}\n{traceback.format_exc()}"
         logger.error(error_msg)
         yield f"data: {json.dumps({'type': 'error', 'message': error_msg})}\n\n"
 
+
 @app.post("/regenerate-image")
 async def regenerate_image(request: dict):
     try:
         scene_index = request.get("sceneIndex")
-        
+
         logger.info(f"收到重新生成图片请求: scene_index={scene_index}")
-        
+
         if scene_index is None:
             raise HTTPException(status_code=400, detail="Missing scene_index parameter")
-            
+
         # 这里可以实现重新生成逻辑
         # 暂时返回错误信息
         return {
             "success": False,
             "message": "重新生成功能暂未实现"
         }
-        
+
     except Exception as e:
         logger.error(f"重新生成图片失败: {str(e)}")
         return {
@@ -139,6 +211,7 @@ async def regenerate_image(request: dict):
             "message": str(e)
         }
 
+
 if __name__ == "__main__":
     logger.info("启动服务器...")
-    uvicorn.run(app, host="0.0.0.0", port=8000) 
+    uvicorn.run(app, host="0.0.0.0", port=8000)

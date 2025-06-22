@@ -1,196 +1,440 @@
-    <html>
-        <head>
-            <title>小说转漫画服务</title>
-            <style>
-                body { font-family: Arial, sans-serif; margin: 40px; }
-                .container { max-width: 800px; margin: 0 auto; }
-                textarea { width: 100%; height: 200px; margin: 10px 0; }
-                button { padding: 10px 20px; background-color: #4CAF50; color: white; border: none; cursor: pointer; }
-                #result { margin-top: 20px; }
-                .scene { margin: 20px 0; padding: 20px; border: 1px solid #ddd; border-radius: 8px; background-color: #f9f9f9; }
-                .scene h3 { color: #333; margin-bottom: 15px; }
-                .scene p { color: #666; line-height: 1.6; margin-bottom: 15px; font-size: 16px; }
-                .scene img { max-width: 100%; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-                .error { color: red; padding: 10px; border: 1px solid red; margin: 10px 0; border-radius: 4px; }
-                .loading { color: #666; font-style: italic; }
-                .image-actions { margin-top: 10px; text-align: center; }
-                .image-actions button { 
-                    margin: 0 5px;
-                    padding: 5px 15px;
-                    font-size: 14px;
-                }
-                .regenerate-btn { background-color: #4CAF50; }
-                .image-container { position: relative; }
-                .image-status { 
-                    position: absolute;
-                    top: 10px;
-                    right: 10px;
-                    padding: 5px 10px;
-                    border-radius: 4px;
-                    background-color: rgba(0,0,0,0.7);
-                    color: white;
-                    display: none;
-                }
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <img src="/static/ThePromisedLand.png" alt="项目标识" style="max-width: 200px; display: block; margin: 0 auto 20px auto; border-radius: 8px;">
-                <h1>小说转漫画服务 (本地Diffusion)</h1>
-                <div>
-                    <textarea id="novelText" placeholder="请输入小说文本..."></textarea>
-                    <div style="margin: 10px 0;">
-                        <label for="modelSelect">选择模型：</label>
-                        <select id="modelSelect" style="padding: 5px; margin-left: 10px;">
-                            <option value="">加载中...</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label for="numScenes">场景数量：</label>
-                        <input type="number" id="numScenes" value="10" min="1" max="20">
-                    </div>
-                    <button onclick="generateComic()">生成漫画</button>
-                </div>
-                <div id="result"></div>
+<html>
+<head>
+    <title>小说转漫画服务</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 40px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        textarea {
+            width: 100%;
+            height: 200px;
+            margin: 10px 0;
+        }
+
+        button {
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+
+        #result {
+            margin-top: 20px;
+        }
+
+        .scene {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background-color: #f9f9f9;
+        }
+
+        .scene h3 {
+            color: #333;
+            margin-bottom: 15px;
+        }
+
+        .scene p {
+            color: #666;
+            line-height: 1.6;
+            margin-bottom: 15px;
+            font-size: 16px;
+        }
+
+        .scene img {
+            max-width: 100%;
+            border-radius: 4px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .error {
+            color: red;
+            padding: 10px;
+            border: 1px solid red;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+
+        .info {
+            color: #2196F3;
+            padding: 10px;
+            border: 1px solid #2196F3;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+
+        .success {
+            color: #4CAF50;
+            padding: 10px;
+            border: 1px solid #4CAF50;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+
+        .loading {
+            color: #666;
+            font-style: italic;
+        }
+
+        .image-actions {
+            margin-top: 10px;
+            text-align: center;
+        }
+
+        .image-actions button {
+            margin: 0 5px;
+            padding: 5px 15px;
+            font-size: 14px;
+        }
+
+        .regenerate-btn {
+            background-color: #4CAF50;
+        }
+
+        .image-container {
+            position: relative;
+        }
+
+        .image-status {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            padding: 5px 10px;
+            border-radius: 4px;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            display: none;
+        }
+
+        .model-section {
+            margin: 10px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background-color: #f8f9fa;
+        }
+
+        .model-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .model-status {
+            margin-top: 10px;
+            padding: 8px;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .confirm-btn {
+            background-color: #2196F3;
+        }
+
+        .confirm-btn:disabled {
+            background-color: #cccccc;
+        }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 8px;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <img src="/static/ThePromisedLand.png" alt="项目标识"
+         style="max-width: 200px; display: block; margin: 0 auto 20px auto; border-radius: 8px;">
+    <h1>小说转漫画服务 (本地Diffusion)</h1>
+    <div>
+        <textarea id="novelText" placeholder="请输入小说文本..."></textarea>
+
+        <div class="model-section">
+            <h3>模型选择</h3>
+            <div class="model-controls">
+                <label for="modelSelect">选择模型：</label>
+                <select id="modelSelect" style="padding: 5px;">
+                    <option value="">加载中...</option>
+                </select>
+                <button id="confirmModelBtn" class="confirm-btn" onclick="confirmModel()" disabled>确认加载</button>
             </div>
+            <div id="modelStatus" class="model-status" style="display: none;"></div>
+        </div>
 
-            <script>
-                let selectedModel = null;
-                
-                // 页面加载时获取可用模型列表
-                window.addEventListener('load', async function() {
-                    try {
-                        const response = await fetch('/available-models');
-                        const data = await response.json();
-                        
-                        const modelSelect = document.getElementById('modelSelect');
-                        modelSelect.innerHTML = '';
-                        
-                        if (data.models && data.models.length > 0) {
-                            // 添加默认选项
-                            const defaultOption = document.createElement('option');
-                            defaultOption.value = '';
-                            defaultOption.textContent = '请选择模型';
-                            modelSelect.appendChild(defaultOption);
-                            
-                            data.models.forEach(model => {
-                                const option = document.createElement('option');
-                                option.value = model;
-                                option.textContent = model;
-                                modelSelect.appendChild(option);
-                            });
-                        } else {
-                            const option = document.createElement('option');
-                            option.value = '';
-                            option.textContent = '无可用模型';
-                            modelSelect.appendChild(option);
-                        }
-                    } catch (error) {
-                        console.error('获取模型列表失败:', error);
-                    }
+        <div>
+            <label for="numScenes">场景数量：</label>
+            <input type="number" id="numScenes" value="10" min="1" max="20">
+        </div>
+        <button id="generateBtn" onclick="generateComic()">生成漫画</button>
+    </div>
+    <div id="result"></div>
+</div>
+
+<script>
+    let selectedModel = null;
+    let isModelLoaded = false;
+    let isLoadingModel = false;
+
+    // 页面加载时获取可用模型列表和模型状态
+    window.addEventListener('load', async function () {
+        await loadAvailableModels();
+        await checkModelStatus();
+    });
+
+    async function loadAvailableModels() {
+        try {
+            const response = await fetch('/available-models');
+            const data = await response.json();
+
+            const modelSelect = document.getElementById('modelSelect');
+            modelSelect.innerHTML = '';
+
+            if (data.models && data.models.length > 0) {
+                // 添加默认选项
+                const defaultOption = document.createElement('option');
+                defaultOption.value = '';
+                defaultOption.textContent = '请选择模型';
+                modelSelect.appendChild(defaultOption);
+
+                data.models.forEach(model => {
+                    const option = document.createElement('option');
+                    option.value = model;
+                    option.textContent = model;
+                    modelSelect.appendChild(option);
+                });
+            } else {
+                const option = document.createElement('option');
+                option.value = '';
+                option.textContent = '无可用模型';
+                modelSelect.appendChild(option);
+            }
+        } catch (error) {
+            console.error('获取模型列表失败:', error);
+        }
+    }
+
+    async function checkModelStatus() {
+        try {
+            const response = await fetch('/model-status');
+            const data = await response.json();
+
+            isModelLoaded = data.is_loaded;
+
+            if (data.is_loaded && data.current_model) {
+                selectedModel = data.current_model;
+                document.getElementById('modelSelect').value = data.current_model;
+                showModelStatus(data.message, 'success');
+                document.getElementById('confirmModelBtn').disabled = true;
+            }
+        } catch (error) {
+            console.error('获取模型状态失败:', error);
+        }
+    }
+
+    // 模型选择变化时
+    document.getElementById('modelSelect').addEventListener('change', async function () {
+        const modelName = this.value;
+        const confirmBtn = document.getElementById('confirmModelBtn');
+
+        if (modelName && !isLoadingModel) {
+            try {
+                const response = await fetch('/set-model', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        model_name: modelName
+                    })
                 });
 
-                // 模型选择变化时设置模型
-                document.getElementById('modelSelect').addEventListener('change', async function() {
-                    const modelName = this.value;
-                    if (modelName) {
-                        try {
-                            const response = await fetch('/set-model', {
-                                method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/json'
-                                },
-                                body: JSON.stringify({
-                                    model_name: modelName
-                                })
-                            });
-                            
-                            const result = await response.json();
-                            if (result.success) {
-                                selectedModel = modelName;
-                                console.log('模型设置成功:', modelName);
-                            } else {
-                                console.error('模型设置失败:', result.message);
-                                alert('模型设置失败: ' + result.message);
-                            }
-                        } catch (error) {
-                            console.error('设置模型请求失败:', error);
-                            alert('设置模型失败: ' + error.message);
-                        }
-                    }
-                });
+                const result = await response.json();
+                if (result.success) {
+                    selectedModel = modelName;
+                    confirmBtn.disabled = false;
+                    showModelStatus(`模型已选择: ${modelName}，点击确认加载`, 'info');
+                    console.log('模型设置成功:', modelName);
+                } else {
+                    console.error('模型设置失败:', result.message);
+                    showModelStatus('模型设置失败: ' + result.message, 'error');
+                }
+            } catch (error) {
+                console.error('设置模型请求失败:', error);
+                showModelStatus('设置模型失败: ' + error.message, 'error');
+            }
+        } else {
+            confirmBtn.disabled = true;
+            hideModelStatus();
+        }
+    });
 
-                async function regenerateImage(sceneIndex) {
-                    const sceneDiv = document.querySelector(`#scene-${sceneIndex}`);
-                    const statusDiv = sceneDiv.querySelector('.image-status');
-                    statusDiv.style.display = 'block';
-                    statusDiv.textContent = '重新生成中...';
-                    
-                    try {
-                        const response = await fetch('/regenerate-image', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json'
-                            },
-                            body: JSON.stringify({
-                                sceneIndex: sceneIndex
-                            })
-                        });
-                        
-                        const result = await response.json();
-                        if (result.success) {
-                            statusDiv.textContent = '生成成功！';
-                            // 更新图片URL
-                            const img = sceneDiv.querySelector('img');
-                            img.src = result.imageUrl;
-                            setTimeout(() => {
-                                statusDiv.style.display = 'none';
-                            }, 2000);
-                        } else {
-                            statusDiv.textContent = '生成失败：' + result.message;
-                        }
-                    } catch (error) {
-                        statusDiv.textContent = '请求失败：' + error.message;
-                    }
+    async function confirmModel() {
+        if (!selectedModel || isLoadingModel) return;
+
+        const confirmBtn = document.getElementById('confirmModelBtn');
+        const modelSelect = document.getElementById('modelSelect');
+
+        // 开始加载状态
+        isLoadingModel = true;
+        confirmBtn.disabled = true;
+        modelSelect.disabled = true;
+        confirmBtn.innerHTML = '<span class="loading-spinner"></span>加载中...';
+
+        showModelStatus('模型已开始加载，请稍候...', 'info');
+
+        try {
+            const response = await fetch('/load-model', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                isModelLoaded = true;
+                showModelStatus('模型已加载完成！', 'success');
+                confirmBtn.innerHTML = '已加载';
+            } else {
+                isModelLoaded = false;
+                showModelStatus('模型加载失败: ' + result.message, 'error');
+                confirmBtn.innerHTML = '确认加载';
+                confirmBtn.disabled = false;
+                modelSelect.disabled = false;
+            }
+
+        } catch (error) {
+            isModelLoaded = false;
+            console.error('加载模型失败:', error);
+            showModelStatus('模型加载失败: ' + error.message, 'error');
+            confirmBtn.innerHTML = '确认加载';
+            confirmBtn.disabled = false;
+            modelSelect.disabled = false;
+        }
+
+        isLoadingModel = false;
+    }
+
+    function showModelStatus(message, type) {
+        const statusDiv = document.getElementById('modelStatus');
+        statusDiv.style.display = 'block';
+        statusDiv.textContent = message;
+        statusDiv.className = `model-status ${type}`;
+    }
+
+    function hideModelStatus() {
+        const statusDiv = document.getElementById('modelStatus');
+        statusDiv.style.display = 'none';
+    }
+
+    async function regenerateImage(sceneIndex) {
+        const sceneDiv = document.querySelector(`#scene-${sceneIndex}`);
+        const statusDiv = sceneDiv.querySelector('.image-status');
+        statusDiv.style.display = 'block';
+        statusDiv.textContent = '重新生成中...';
+
+        try {
+            const response = await fetch('/regenerate-image', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    sceneIndex: sceneIndex
+                })
+            });
+
+            const result = await response.json();
+            if (result.success) {
+                statusDiv.textContent = '生成成功！';
+                // 更新图片URL
+                const img = sceneDiv.querySelector('img');
+                img.src = result.imageUrl;
+                setTimeout(() => {
+                    statusDiv.style.display = 'none';
+                }, 2000);
+            } else {
+                statusDiv.textContent = '生成失败：' + result.message;
+            }
+        } catch (error) {
+            statusDiv.textContent = '请求失败：' + error.message;
+        }
+    }
+
+    async function generateComic() {
+        const text = document.getElementById('novelText').value;
+        const numScenes = document.getElementById('numScenes').value;
+        const resultDiv = document.getElementById('result');
+
+        // 检查是否选择了模型
+        if (!selectedModel) {
+            alert('请先选择模型');
+            return;
+        }
+
+        // 检查是否输入了文本
+        if (!text.trim()) {
+            alert('请输入小说文本');
+            return;
+        }
+
+        resultDiv.innerHTML = '<div class="loading">正在生成中...</div>';
+
+        try {
+            const url = `/novel-to-comic-stream?text=${encodeURIComponent(text)}&num_scenes=${numScenes}`;
+            const eventSource = new EventSource(url);
+
+            eventSource.onmessage = function (event) {
+                const data = JSON.parse(event.data);
+
+                if (data.type === 'error') {
+                    resultDiv.innerHTML = `<div class="error">生成失败：${data.message}</div>`;
+                    eventSource.close();
+                    return;
                 }
 
-                async function generateComic() {
-                    const text = document.getElementById('novelText').value;
-                    const numScenes = document.getElementById('numScenes').value;
-                    const resultDiv = document.getElementById('result');
-                    
-                    // 检查是否选择了模型
-                    if (!selectedModel) {
-                        alert('请先选择模型');
-                        return;
-                    }
-                    
-                    // 检查是否输入了文本
-                    if (!text.trim()) {
-                        alert('请输入小说文本');
-                        return;
-                    }
-                    
-                    resultDiv.innerHTML = '<div class="loading">正在生成中...</div>';
-                    
-                    try {
-                        const url = `/novel-to-comic-stream?text=${encodeURIComponent(text)}&num_scenes=${numScenes}`;
-                        const eventSource = new EventSource(url);
-                        
-                        eventSource.onmessage = function(event) {
-                            const data = JSON.parse(event.data);
-                            
-                            if (data.type === 'error') {
-                                resultDiv.innerHTML = `<div class="error">生成失败：${data.message}</div>`;
-                                eventSource.close();
-                                return;
-                            }
-                            
-                            if (data.type === 'scene') {
-                                const sceneDiv = document.createElement('div');
-                                sceneDiv.className = 'scene';
-                                sceneDiv.id = `scene-${data.index}`;
-                                sceneDiv.innerHTML = `
+                if (data.type === 'info') {
+                    resultDiv.innerHTML = `<div class="info">${data.message}</div>`;
+                    return;
+                }
+
+                if (data.type === 'scene') {
+                    const sceneDiv = document.createElement('div');
+                    sceneDiv.className = 'scene';
+                    sceneDiv.id = `scene-${data.index}`;
+                    sceneDiv.innerHTML = `
                                     <h3>场景 ${data.index + 1}</h3>
                                     <p>${data.description}</p>
                                     <div class="image-container">
@@ -201,38 +445,38 @@
                                         <button class="regenerate-btn" onclick="regenerateImage(${data.index})">重新生成</button>
                                     </div>
                                 `;
-                                
-                                if (data.index === 0) {
-                                    resultDiv.innerHTML = '';
-                                }
-                                
-                                resultDiv.appendChild(sceneDiv);
-                            }
-                            
-                            if (data.type === 'scene_error') {
-                                const errorDiv = document.createElement('div');
-                                errorDiv.className = 'scene error';
-                                errorDiv.innerHTML = `<h3>场景 ${data.index + 1}</h3><div>${data.message}</div>`;
-                                if (data.index === 0) {
-                                    resultDiv.innerHTML = '';
-                                }
-                                resultDiv.appendChild(errorDiv);
-                            }
-                            
-                            if (data.type === 'complete') {
-                                eventSource.close();
-                            }
-                        };
-                        
-                        eventSource.onerror = function(error) {
-                            resultDiv.innerHTML = '<div class="error">连接错误，请重试</div>';
-                            eventSource.close();
-                        };
-                        
-                    } catch (error) {
-                        resultDiv.innerHTML = `<div class="error">生成失败：${error.message}</div>`;
+
+                    if (data.index === 0) {
+                        resultDiv.innerHTML = '';
                     }
+
+                    resultDiv.appendChild(sceneDiv);
                 }
-            </script>
-        </body>
-    </html> 
+
+                if (data.type === 'scene_error') {
+                    const errorDiv = document.createElement('div');
+                    errorDiv.className = 'scene error';
+                    errorDiv.innerHTML = `<h3>场景 ${data.index + 1}</h3><div>${data.message}</div>`;
+                    if (data.index === 0) {
+                        resultDiv.innerHTML = '';
+                    }
+                    resultDiv.appendChild(errorDiv);
+                }
+
+                if (data.type === 'complete') {
+                    eventSource.close();
+                }
+            };
+
+            eventSource.onerror = function (error) {
+                resultDiv.innerHTML = '<div class="error">连接错误，请重试</div>';
+                eventSource.close();
+            };
+
+        } catch (error) {
+            resultDiv.innerHTML = `<div class="error">生成失败：${error.message}</div>`;
+        }
+    }
+</script>
+</body>
+</html>
