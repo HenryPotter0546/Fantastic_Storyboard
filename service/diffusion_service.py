@@ -28,14 +28,31 @@ class LocalDiffusionService:
     def set_model(self, model_name: str):
         """设置要使用的模型（不立即加载）"""
         try:
+            # 如果设置的是不同的模型，清除当前模型
+            if self.model_name != model_name:
+                logger.info(f"切换模型从 {self.model_name} 到 {model_name}")
+                self._unload_current_model()
+
             self.model_name = model_name
             self.model_config = self._load_model_config()
-            # 清除之前加载的模型
-            self.pipeline = None
             logger.info(f"模型已设置为: {model_name}")
         except Exception as e:
             logger.error(f"设置模型失败: {str(e)}")
             raise
+
+    def _unload_current_model(self):
+        """卸载当前模型，释放内存"""
+        if self.pipeline is not None:
+            logger.info("正在卸载当前模型...")
+            del self.pipeline
+            self.pipeline = None
+
+            # 清理GPU内存
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+                torch.cuda.synchronize()
+
+            logger.info("当前模型已卸载")
 
     def is_model_loaded(self):
         """检查模型是否已加载"""
@@ -46,9 +63,17 @@ class LocalDiffusionService:
         if self.model_name is None:
             raise ValueError("未设置模型名称，请先调用 set_model() 方法")
 
+        # 如果有不同的模型已加载，先卸载
         if self.pipeline is not None:
-            logger.info("模型已经加载，无需重复加载")
-            return
+            current_model_path = getattr(self.pipeline, '_model_path', None)
+            new_model_path = self.model_config['path']
+
+            if current_model_path != new_model_path:
+                logger.info("检测到模型变更，卸载当前模型")
+                self._unload_current_model()
+            else:
+                logger.info("模型已经加载，无需重复加载")
+                return
 
         logger.info(f"开始预加载模型: {self.model_name}")
         self._load_model()
@@ -169,6 +194,9 @@ class LocalDiffusionService:
                 self.pipeline.enable_attention_slicing()
                 self.pipeline.enable_vae_slicing()
 
+            # 记录模型路径用于后续比较
+            setattr(self.pipeline, '_model_path', model_path)
+
             logger.info("模型加载完成")
 
         except Exception as e:
@@ -224,7 +252,7 @@ class LocalDiffusionService:
                 image = self.pipeline(
                     prompt=prompt,
                     negative_prompt=negative_prompt,
-                    num_inference_steps=30,
+                    num_inference_steps=50,
                     guidance_scale=7.5,
                     width=512,
                     height=512
