@@ -8,6 +8,9 @@ import base64
 import io
 import yaml
 from dotenv import load_dotenv
+import ffmpeg
+import shutil
+from typing import List
 
 load_dotenv()
 
@@ -323,3 +326,31 @@ class LocalDiffusionService:
                 "success": False,
                 "message": f"处理失败: {str(e)}"
             }
+
+    def create_video_from_images(self, image_paths: List[str], output_path: str, fps: int = 2):
+        """将图片拼接成视频"""
+        try:
+            if not image_paths:
+                raise ValueError("图片列表不能为空")
+            
+            # 确保输出目录存在
+            output_dir = os.path.dirname(output_path)
+            if not os.path.exists(output_dir):
+                os.makedirs(output_dir)
+            
+            # 使用ffmpeg将图片拼接成视频
+            (
+                ffmpeg
+                .input('pipe:', r=str(fps), f='image2pipe')
+                .output(output_path, vcodec='libx264', pix_fmt='yuv420p', y='-y')
+                .run(input=b''.join(open(p, 'rb').read() for p in image_paths))
+            )
+            
+            logger.info(f"视频创建成功: {output_path}")
+            return output_path
+            
+        except Exception as e:
+            logger.error(f"创建视频失败: {str(e)}")
+            import traceback
+            logger.error(f"详细错误信息: {traceback.format_exc()}")
+            raise
