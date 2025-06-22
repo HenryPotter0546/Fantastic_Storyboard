@@ -10,6 +10,10 @@ import traceback
 import logging
 import json
 import uvicorn
+import os
+import uuid
+import base64
+import shutil
 
 # 配置日志
 logging.basicConfig(level=logging.INFO)
@@ -125,42 +129,37 @@ async def novel_to_comic_stream(text: str, num_scenes: int = 10):
 
 
 async def generate_scenes(text: str, num_scenes: int):
+    session_id = str(uuid.uuid4())
     try:
-        logger.info("开始处理请求")
-
+        logger.info(f"开始处理请求，会话ID: {session_id}")
+        
+        # 创建一个临时目录来存放生成的图片
+        temp_dir = os.path.join("temp", session_id)
+        if not os.path.exists(temp_dir):
+            os.makedirs(temp_dir)
+        
+        image_paths = []
+        
         # 初始化服务
         logger.info("初始化服务...")
         deepseek = DeepSeekService()
-
+        
         # 检查是否已设置模型
         if diffusion_service.model_name is None:
             error_msg = "请先选择模型"
             logger.error(error_msg)
             yield f"data: {json.dumps({'type': 'error', 'message': error_msg})}\n\n"
             return
-
-        # 检查模型是否已加载，如果没有则自动加载
-        if not diffusion_service.is_model_loaded():
-            logger.info("模型未加载，开始自动加载...")
-            yield f"data: {json.dumps({'type': 'info', 'message': '模型未加载，正在自动加载中...'})}\n\n"
-            try:
-                diffusion_service.preload_model()
-                yield f"data: {json.dumps({'type': 'info', 'message': '模型加载完成，开始生成...'})}\n\n"
-            except Exception as e:
-                error_msg = f"模型加载失败: {str(e)}"
-                logger.error(error_msg)
-                yield f"data: {json.dumps({'type': 'error', 'message': error_msg})}\n\n"
-                return
-
+        
         # 分割场景（得到中文描述）
         logger.info("开始分割场景...")
         scenes_cn = deepseek.split_into_scenes_cn(text, num_scenes)
         logger.info(f"场景分割完成，共 {len(scenes_cn)} 个场景")
-
+        
         # 为每个场景生成图片
         logger.info("开始生成图片...")
         for i, scene_cn in enumerate(scenes_cn):
-            logger.info(f"处理第 {i + 1}/{len(scenes_cn)} 个场景")
+            logger.info(f"处理第 {i+1}/{len(scenes_cn)} 个场景")
             try:
                 # 将中文场景描述翻译成英文prompt
                 english_prompt = deepseek.translate_to_english(scene_cn)
@@ -171,16 +170,27 @@ async def generate_scenes(text: str, num_scenes: int):
                 # 生成图片
                 image_url = diffusion_service.generate_image_with_style(prompt, "comic")
                 logger.info(f"图片生成完成")
+                
+                # 保存图片到临时目录
+                image_data = base64.b64decode(image_url.split(',')[1])
+                image_path = os.path.join(temp_dir, f"scene_{i+1}.png")
+                with open(image_path, "wb") as f:
+                    f.write(image_data)
+                image_paths.append(image_path)
+                
                 # 只发送中文描述
                 yield f"data: {json.dumps({'type': 'scene', 'index': i, 'description': scene_cn, 'image_url': image_url})}\n\n"
             except Exception as e:
-                error_msg = f"场景 {i + 1} 生成失败: {str(e)}"
+                error_msg = f"场景 {i+1} 生成失败: {str(e)}"
                 logger.error(error_msg)
                 yield f"data: {json.dumps({'type': 'scene_error', 'index': i, 'message': error_msg})}\n\n"
-
-        # 发送完成消息
+        
+        # 发送图片生成完成的消息，并包含会话ID
+        yield f"data: {json.dumps({'type': 'all_images_generated', 'session_id': session_id})}\n\n"
+        
+        # 发送完成消息，以便前端正常关闭连接
         yield f"data: {json.dumps({'type': 'complete'})}\n\n"
-
+            
     except Exception as e:
         error_msg = f"错误: {str(e)}\n{traceback.format_exc()}"
         logger.error(error_msg)
@@ -212,6 +222,53 @@ async def regenerate_image(request: dict):
         }
 
 
+@app.get("/video", response_class=HTMLResponse)
+async def get_video_page():
+    """获取视频播放页面"""
+    return FileResponse("templates/video.html")
+
+
+@app.post("/create-video")
+async def create_video(request: dict):
+    """根据会话ID创建视频"""
+    try:
+        session_id = request.get("session_id")
+        if not session_id:
+            raise HTTPException(status_code=400, detail="Missing session_id parameter")
+        
+        logger.info(f"开始创建视频，会话ID: {session_id}")
+        
+        temp_dir = os.path.join("temp", session_id)
+        if not os.path.exists(temp_dir):
+            raise HTTPException(status_code=404, detail="Session not found")
+        
+        image_paths = sorted([os.path.join(temp_dir, f) for f in os.listdir(temp_dir) if f.endswith(".png")])
+        
+        if not image_paths:
+            raise HTTPException(status_code=400, detail="No images found for this session")
+        
+        # 生成视频
+        video_output_dir = os.path.join("static", "videos")
+        if not os.path.exists(video_output_dir):
+            os.makedirs(video_output_dir)
+        
+        video_path = os.path.join(video_output_dir, f"{session_id}.mp4")
+        diffusion_service.create_video_from_images(image_paths, video_path)
+        logger.info(f"视频生成成功: {video_path}")
+        
+        # 清理临时文件
+        shutil.rmtree(temp_dir)
+        logger.info(f"已清理临时目录: {temp_dir}")
+        
+        return {"success": True, "video_url": f"/static/videos/{session_id}.mp4"}
+        
+    except Exception as e:
+        logger.error(f"创建视频失败: {str(e)}")
+        import traceback
+        logger.error(f"详细错误信息: {traceback.format_exc()}")
+        return {"success": False, "message": str(e)}
+
+
 if __name__ == "__main__":
     logger.info("启动服务器...")
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8080)

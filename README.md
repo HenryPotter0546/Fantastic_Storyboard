@@ -71,6 +71,9 @@ Unstable:
 
 ![运行示例](screenshots/example_one.png)
 
+## 生成视频
+请提前在本地安装 ffmpeg
+
 ## 技术架构
 
 - **后端**: FastAPI
