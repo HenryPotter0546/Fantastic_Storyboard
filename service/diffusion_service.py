@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 import ffmpeg
 import shutil
 from typing import List
+from typing import Callable, Optional
 
 load_dotenv()
 
@@ -239,10 +240,20 @@ class LocalDiffusionService:
         """获取可用的模型列表（公共方法）"""
         return self._get_available_models_from_config()
 
-    def generate_image(self, prompt: str, negative_prompt: str = None) -> str:
+    def generate_image(
+        self,
+        prompt: str,
+        negative_prompt: str = None,
+        steps: int = 30,
+        guidance_scale: float = 7.5,
+        width: int = 512,
+        height: int = 512,
+        callback: Optional[Callable] = None
+    ) -> str:
         """生成图片并返回base64编码的图片数据"""
         try:
             logger.info(f"开始生成图片，提示词: {prompt}")
+            logger.info(f"参数: steps={steps}, guidance={guidance_scale}, size={width}x{height}")
 
             self._ensure_model_loaded()
 
@@ -255,10 +266,12 @@ class LocalDiffusionService:
                 image = self.pipeline(
                     prompt=prompt,
                     negative_prompt=negative_prompt,
-                    num_inference_steps=50,
-                    guidance_scale=7.5,
-                    width=512,
-                    height=512
+                    num_inference_steps=steps,
+                    guidance_scale=guidance_scale,
+                    width=width,
+                    height=height,
+                    callback=callback,         # 回调函数
+                    callback_steps=1           # 确保每一步都回调
                 ).images[0]
 
             # 转换为base64
@@ -274,9 +287,20 @@ class LocalDiffusionService:
 
         except Exception as e:
             logger.error(f"生成图片时发生错误: {str(e)}")
+            import traceback
+            logger.error(f"详细错误信息: {traceback.format_exc()}")
             raise
 
-    def generate_image_with_style(self, prompt: str, style: str = "comic") -> str:
+    def generate_image_with_style(
+        self,
+        prompt: str,
+        style: str = "comic",
+        steps: int = 30,
+        guidance_scale: float = 7.5,
+        width: int = 512,
+        height: int = 512,
+        callback: Optional[Callable] = None
+    ) -> str:
         """根据风格生成图片"""
         try:
             # 根据风格调整提示词
@@ -292,7 +316,14 @@ class LocalDiffusionService:
             style_prompt = style_prompts.get(style, style_prompts["comic"])
             full_prompt = f"{style_prompt}, {prompt}, high quality, detailed"
 
-            return self.generate_image(full_prompt)
+            return self.generate_image(
+                prompt=full_prompt,
+                steps=steps,
+                guidance_scale=guidance_scale,
+                width=width,
+                height=height,
+                callback=callback
+            )
 
         except Exception as e:
             logger.error(f"生成风格化图片时发生错误: {str(e)}")
