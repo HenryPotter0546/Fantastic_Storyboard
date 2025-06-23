@@ -3,177 +3,269 @@
 <head>
     <meta charset="UTF-8">
     <title>小说转漫画服务</title>
+    <link rel="stylesheet" href="https://unpkg.com/nes.css/css/nes.min.css">
+    <link href="https://fonts.googleapis.com/css?family=Press+Start+2P" rel="stylesheet">
     <style>
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            margin: 40px;
-            background-color: #f4f4f9;
-            color: #333;
+            font-family: 'Press Start 2P', cursive;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 20px;
+            color: #212529;
         }
 
         .container {
             max-width: 800px;
             margin: 0 auto;
-            background-color: #fff;
-            padding: 20px 40px;
-            border-radius: 12px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            padding: 20px;
+            background-color: white;
+            border: 4px solid #212529;
+            box-shadow: 8px 8px 0 rgba(0, 0, 0, 0.2);
         }
 
-        textarea {
-            width: 100%;
-            height: 200px;
-            margin: 10px 0;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 8px;
+        .logo {
+            display: block;
+            margin: 0 auto 30px auto;
+            max-width: 200px;
+            image-rendering: pixelated;
+        }
+
+        h1 {
+            font-size: 24px;
+            margin-bottom: 30px;
+            text-align: center;
+            color: #212529;
+        }
+
+        h3 {
             font-size: 16px;
-            resize: vertical;
-            box-sizing: border-box;
-        }
-
-        button {
-            padding: 10px 20px;
-            background-color: #007bff;
-            color: white;
-            border: none;
-            cursor: pointer;
-            border-radius: 8px;
-            font-size: 16px;
-            transition: background-color 0.2s;
-        }
-
-        button:hover:not(:disabled) {
-            background-color: #0056b3;
-        }
-
-        button:disabled {
-            background-color: #cccccc;
-            cursor: not-allowed;
+            margin-bottom: 15px;
         }
 
         .section-box {
             margin: 20px 0;
             padding: 20px;
-            border: 1px solid #e9ecef;
-            border-radius: 8px;
-            background-color: #f8f9fa;
-        }
-        
-        .section-box h3 {
-            margin-top: 0;
-            color: #495057;
-            border-bottom: 2px solid #eee;
-            padding-bottom: 10px;
+            border: 4px solid #212529;
+            background-color: white;
         }
 
         #result {
-            margin-top: 20px;
+            margin-top: 30px;
         }
 
         .scene {
-            margin: 20px 0;
+            margin: 30px 0;
             padding: 20px;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            background-color: #fff;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-            transition: all 0.3s ease;
+            border: 4px solid #212529;
+            background-color: white;
+            position: relative;
         }
 
-        .scene h3 { color: #333; margin-bottom: 15px; }
-        .scene p { color: #666; line-height: 1.6; margin-bottom: 15px; font-size: 16px; }
-        .scene img { max-width: 100%; border-radius: 4px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1); }
+        .scene h3 {
+            color: #212529;
+            margin-bottom: 15px;
+        }
 
-        .message-box { padding: 15px; border: 1px solid; margin: 10px 0; border-radius: 8px; text-align: center; }
-        .error { color: #721c24; background-color: #f8d7da; border-color: #f5c6cb; }
-        .info { color: #0c5460; background-color: #d1ecf1; border-color: #bee5eb; }
-        .success { color: #155724; background-color: #d4edda; border-color: #c3e6cb; }
-        .warning { color: #856404; background-color: #fff3cd; border-color: #ffeeba; }
+        .scene p {
+            color: #666;
+            line-height: 1.6;
+            margin-bottom: 15px;
+            font-size: 12px;
+        }
 
-        .model-controls { display: flex; align-items: center; gap: 15px; flex-wrap: wrap; }
-        .model-status { margin-top: 10px; padding: 8px 12px; border-radius: 4px; font-size: 14px; }
-        .confirm-btn { background-color: #28a745; }
-        .confirm-btn:hover:not(:disabled) { background-color: #218838; }
+        .scene img {
+            max-width: 100%;
+            border: 4px solid #212529;
+            image-rendering: pixelated;
+            margin-bottom: 15px;
+        }
+
+        .image-actions {
+            margin-top: 15px;
+            text-align: center;
+        }
+
+        .current-model-info {
+            background-color: #e3f2fd;
+            padding: 10px;
+            border-left: 4px solid #212529;
+            margin-bottom: 15px;
+        }
+
+        .model-selection-area {
+            display: none;
+            margin-top: 15px;
+            padding: 15px;
+            background-color: #fff3cd;
+            border: 4px solid #212529;
+        }
+
+        .model-controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+        }
 
         .loading-spinner {
             display: inline-block;
-            width: 16px; height: 16px;
-            border: 2px solid #f3f3f3; border-top: 2px solid #3498db;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #212529;
             border-radius: 50%;
             animation: spin 1s linear infinite;
-            margin-right: 8px; vertical-align: middle;
+            margin-right: 8px;
+            image-rendering: pixelated;
         }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
-        .param-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 15px; }
-        .param-item { display: flex; flex-direction: column; }
-        .param-item label { margin-bottom: 5px; font-size: 14px; color: #333; }
-        .param-item input { padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
 
-        #overallProgress { display: none; }
-        
+        .message-box {
+            padding: 10px;
+            margin: 10px 0;
+            border: 4px solid;
+            font-size: 12px;
+        }
+
+        .error {
+            border-color: #f44336;
+            background-color: #ffebee;
+        }
+
+        .info {
+            border-color: #2196F3;
+            background-color: #e3f2fd;
+        }
+
+        .success {
+            border-color: #4CAF50;
+            background-color: #e8f5e9;
+        }
+
+        .warning {
+            border-color: #FF9800;
+            background-color: #fff3e0;
+        }
+
+        .param-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 15px;
+        }
+
+        .param-item {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .param-item label {
+            margin-bottom: 5px;
+            font-size: 12px;
+        }
+
         .progress-bar-container {
-            width: 100%; background-color: #e9ecef; border-radius: 4px;
-            margin: 15px 0; height: 20px; overflow: hidden; position: relative;
-        }
-        .progress-bar {
-            width: 0%; height: 100%; background-color: #007bff; color: white;
-            transition: width 0.3s ease; display: flex; align-items: center;
-            justify-content: center; font-size: 12px; font-weight: bold;
+            width: 100%;
+            background-color: #e9ecef;
+            border: 4px solid #212529;
+            margin: 15px 0;
+            height: 20px;
+            overflow: hidden;
         }
 
-        #currentModelInfo { display: none; }
-        #modelSelectionArea { display: none; margin-top: 10px; }
-        #initialModelSelection { display: flex; }
+        .progress-bar {
+            width: 0%;
+            height: 100%;
+            background-color: #007bff;
+            color: white;
+            transition: width 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .image-status {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            padding: 5px 10px;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            font-size: 10px;
+            border: 2px solid white;
+            display: none;
+        }
     </style>
 </head>
 <body>
 <div class="container">
-    <img src="/static/ThePromisedLand.png" alt="项目标识"
-         style="max-width: 200px; display: block; margin: 0 auto 20px auto; border-radius: 8px;">
+    
     <h1>小说转漫画服务</h1>
-    <div>
-        <textarea id="novelText" placeholder="在此输入一段奇妙的冒险故事..."></textarea>
-
-        <div class="section-box">
-            <h3>模型管理</h3>
-            <div id="currentModelInfo">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <span id="currentModelText"></span>
-                    <button id="changeModelBtn" onclick="showModelSelection()" class="warning">切换模型</button>
-                </div>
-            </div>
-            <div id="modelSelectionArea">
-                <div class="model-controls">
-                    <label for="modelSelect">选择新模型:</label>
-                    <select id="modelSelect"></select>
-                    <button id="confirmModelBtn" class="confirm-btn" onclick="confirmModel()" disabled>确认加载</button>
-                    <button onclick="hideModelSelection()" style="background-color: #6c757d;">取消</button>
-                </div>
-            </div>
-            <div id="initialModelSelection" class="model-controls">
-                <label for="initialModelSelect">选择模型:</label>
-                <select id="initialModelSelect"></select>
-                <button id="initialConfirmBtn" class="confirm-btn" onclick="confirmInitialModel()" disabled>确认加载</button>
-            </div>
-            <div id="modelStatus" class="message-box" style="display: none;"></div>
-        </div>
-
-        <div class="section-box">
-            <h3>生成参数</h3>
-            <div class="param-grid">
-                 <div class="param-item"><label for="numScenes">场景数量</label><input type="number" id="numScenes" value="10" min="1" max="20"></div>
-                 <div class="param-item"><label for="steps">迭代步数</label><input type="number" id="steps" value="30" min="10" max="100"></div>
-                 <div class="param-item"><label for="guidance">引导系数</label><input type="number" id="guidance" value="7.5" min="1" max="20" step="0.5"></div>
-                 <div class="param-item"><label for="width">图片宽度</label><input type="number" id="width" value="512" min="256" max="1024" step="64"></div>
-                 <div class="param-item"><label for="height">图片高度</label><input type="number" id="height" value="512" min="256" max="1024" step="64"></div>
-            </div>
-        </div>
-        
-        <button id="generateBtn" onclick="generateComic()">生成漫画</button>
+    
+    <div class="nes-field">
+        <textarea id="novelText" class="nes-textarea" placeholder="在此输入一段奇妙的冒险故事..."></textarea>
     </div>
-    <div id="overallProgress" class="message-box info"></div>
+
+    <div class="section-box">
+        <h3>模型管理</h3>
+        <div id="currentModelInfo" class="current-model-info" style="display: none;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span id="currentModelText"></span>
+                <button id="changeModelBtn" class="nes-btn is-warning" onclick="showModelSelection()">切换模型</button>
+            </div>
+        </div>
+        <div id="modelSelectionArea" class="model-selection-area">
+            <div class="model-controls">
+                <label for="modelSelect">选择新模型:</label>
+                <select id="modelSelect" class="nes-select"></select>
+                <button id="confirmModelBtn" class="nes-btn is-primary" onclick="confirmModel()" disabled>确认加载</button>
+                <button class="nes-btn is-error" onclick="hideModelSelection()">取消</button>
+            </div>
+        </div>
+        <div id="initialModelSelection" class="model-controls">
+            <label for="initialModelSelect">选择模型:</label>
+            <select id="initialModelSelect" class="nes-select"></select>
+            <button id="initialConfirmBtn" class="nes-btn is-primary" onclick="confirmInitialModel()" disabled>确认加载</button>
+        </div>
+        <div id="modelStatus" class="message-box" style="display: none;"></div>
+    </div>
+
+    <div class="section-box">
+        <h3>生成参数</h3>
+        <div class="param-grid">
+            <div class="param-item">
+                <label for="numScenes">场景数量</label>
+                <input type="number" id="numScenes" class="nes-input" value="10" min="1" max="20">
+            </div>
+            <div class="param-item">
+                <label for="steps">迭代步数</label>
+                <input type="number" id="steps" class="nes-input" value="30" min="10" max="100">
+            </div>
+            <div class="param-item">
+                <label for="guidance">引导系数</label>
+                <input type="number" id="guidance" class="nes-input" value="7.5" min="1" max="20" step="0.5">
+            </div>
+            <div class="param-item">
+                <label for="width">图片宽度</label>
+                <input type="number" id="width" class="nes-input" value="512" min="256" max="1024" step="64">
+            </div>
+            <div class="param-item">
+                <label for="height">图片高度</label>
+                <input type="number" id="height" class="nes-input" value="512" min="256" max="1024" step="64">
+            </div>
+        </div>
+    </div>
+    
+    <div style="text-align: center; margin: 20px 0;">
+        <button id="generateBtn" class="nes-btn is-success" onclick="generateComic()">生成漫画</button>
+    </div>
+    
+    <div id="overallProgress" class="message-box info" style="display: none;"></div>
     <div id="result"></div>
 </div>
 
@@ -334,7 +426,6 @@
         return `${mins}分 ${secs.toString().padStart(2, '0')}秒`;
     }
 
-    // 这是唯一且正确的 generateComic 函数
     async function generateComic() {
         const text = document.getElementById('novelText').value;
         const numScenes = document.getElementById('numScenes').value;
@@ -347,8 +438,14 @@
         const overallProgressDiv = document.getElementById('overallProgress');
         const generateBtn = document.getElementById('generateBtn');
 
-        if (!isModelLoaded) { alert('请先选择并成功加载一个模型！'); return; }
-        if (!text.trim()) { alert('请输入小说文本！'); return; }
+        if (!isModelLoaded) { 
+            showModelStatus('请先选择并成功加载一个模型！', 'error'); 
+            return; 
+        }
+        if (!text.trim()) { 
+            showModelStatus('请输入小说文本！', 'error'); 
+            return; 
+        }
 
         resultDiv.innerHTML = '';
         overallProgressDiv.style.display = 'block';
@@ -376,10 +473,10 @@
                         <div class="progress-bar" id="progress-bar-${i}">等待中...</div>
                     </div>
                     <div class="image-container" id="image-container-${i}" style="display:none;">
-                        <img src="" alt="场景 ${i + 1}">
+                        
                     </div>
                     <div class="image-actions" id="actions-${i}" style="display:none;">
-                        <button onclick="regenerateImage(${i})">重新生成</button>
+                        <button class="nes-btn is-warning" onclick="regenerateImage(${i})">重新生成</button>
                     </div>
                 `;
                 resultDiv.appendChild(sceneDiv);
@@ -431,9 +528,9 @@
                     break;
                 }
 
-                // ### 新增逻辑：处理 all_images_generated 事件 ###
                 case 'all_images_generated': {
                     const createVideoBtn = document.createElement('button');
+                    createVideoBtn.className = 'nes-btn is-primary';
                     createVideoBtn.textContent = '开始生成视频';
                     createVideoBtn.style.marginTop = '20px';
                     createVideoBtn.onclick = async function() {
@@ -450,19 +547,18 @@
                                 const videoLink = document.createElement('a');
                                 videoLink.href = `/video?video_url=${result.video_url}`;
                                 videoLink.textContent = '观看生成的视频';
-                                videoLink.target = '_blank';
+                                videoLink.className = 'nes-btn is-success';
                                 videoLink.style.display = 'block';
                                 videoLink.style.marginTop = '20px';
-                                videoLink.style.fontSize = '18px';
-                                videoLink.style.fontWeight = 'bold';
+                                videoLink.style.fontSize = '14px';
                                 createVideoBtn.replaceWith(videoLink);
                             } else {
-                                alert('视频生成失败: ' + result.message);
+                                showModelStatus('视频生成失败: ' + result.message, 'error');
                                 createVideoBtn.textContent = '开始生成视频';
                                 createVideoBtn.disabled = false;
                             }
                         } catch (error) {
-                            alert('视频生成请求失败: ' + error.message);
+                            showModelStatus('视频生成请求失败: ' + error.message, 'error');
                             createVideoBtn.textContent = '开始生成视频';
                             createVideoBtn.disabled = false;
                         }
@@ -506,11 +602,9 @@
         };
     }
     
-    // regenerateImage 函数暂时保持不变，因为后端未实现
     async function regenerateImage(sceneIndex) {
-        alert(`重新生成场景 ${sceneIndex + 1} 的功能正在开发中！`);
+        showModelStatus(`重新生成场景 ${sceneIndex + 1} 的功能正在开发中！`, 'warning');
     }
-
 </script>
 </body>
 </html>

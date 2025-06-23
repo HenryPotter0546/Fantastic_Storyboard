@@ -1,34 +1,129 @@
-    <html>
-        <head>
-            <title>视频播放</title>
-            <style>
-                body { font-family: Arial, sans-serif; margin: 40px; text-align: center; }
-                video { max-width: 80%; border: 2px solid #ddd; border-radius: 8px; }
-                h1 { color: #333; }
-                a { color: #4CAF50; text-decoration: none; font-size: 18px; }
-            </style>
-        </head>
-        <body>
-            <h1>生成的漫画视频</h1>
-            <video id="videoPlayer" controls autoplay>
-                <source src="" type="video/mp4">
-                你的浏览器不支持视频播放
-            </video>
-            <br>
-            <a href="/">返回首页</a>
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>视频播放</title>
+    <link rel="stylesheet" href="https://unpkg.com/nes.css/css/nes.min.css">
+    <link href="https://fonts.googleapis.com/css?family=Press+Start+2P" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Press Start 2P', cursive;
+            background-color: #d3d3d3;
+            margin: 40px;
+            text-align: center;
+            color: #212529;
+        }
+
+        h1 {
+            font-size: 24px;
+            color: #212529;
+            text-shadow: 2px 2px 0 #999;
+            margin-bottom: 30px;
+            letter-spacing: 1px;
+        }
+
+        video {
+            max-width: 80%;
+            border: 4px solid #212529;
+            box-shadow: 8px 8px 0 rgba(0, 0, 0, 0.2);
+            margin: 20px 0;
+            image-rendering: pixelated;
+        }
+
+        a {
+            color: #4CAF50;
+            text-decoration: none;
+            font-size: 14px;
+            border-bottom: 2px dotted #4CAF50;
+            padding-bottom: 2px;
+            transition: none;
+        }
+
+        a:hover {
+            color: #3e8e41;
+            border-bottom-style: solid;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: white;
+            border: 4px solid #212529;
+            box-shadow: 8px 8px 0 rgba(0, 0, 0, 0.2);
+        }
+
+        .nes-btn {
+            margin-top: 20px;
+            position: relative;
+        }
+
+        .nes-btn::after {
+            box-shadow: 4px 4px 0 #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>生成的漫画视频</h1>
+        <video id="videoPlayer" controls autoplay>
+            <source src="" type="video/mp4">
+            你的浏览器不支持视频播放
+        </video>
+        <br>
+        <a href="/" class="nes-btn is-success">返回首页</a>
+    </div>
+
+    <script>
+        window.onload = function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const videoUrl = urlParams.get('video_url');
             
-            <script>
-                window.onload = function() {
-                    const urlParams = new URLSearchParams(window.location.search);
-                    const videoUrl = urlParams.get('video_url');
-                    
-                    if (videoUrl) {
-                        const videoPlayer = document.getElementById('videoPlayer');
-                        const source = videoPlayer.getElementsByTagName('source')[0];
-                        source.src = videoUrl;
-                        videoPlayer.load();
-                    }
-                };
-            </script>
-        </body>
-    </html> 
+            if (videoUrl) {
+                const videoPlayer = document.getElementById('videoPlayer');
+                const source = videoPlayer.getElementsByTagName('source')[0];
+                source.src = videoUrl;
+                videoPlayer.load();
+                
+                // 添加像素化视频效果
+                videoPlayer.addEventListener('play', function() {
+                    applyPixelFilter(videoPlayer);
+                });
+            }
+        };
+
+        function applyPixelFilter(videoElement) {
+            // 创建画布用于像素化效果
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            const width = videoElement.videoWidth;
+            const height = videoElement.videoHeight;
+            
+            // 设置画布尺寸
+            canvas.width = width;
+            canvas.height = height;
+            
+            // 替换视频元素为画布
+            videoElement.style.display = 'none';
+            videoElement.parentNode.insertBefore(canvas, videoElement);
+            
+            // 像素大小 (调整这个值可以改变像素化程度)
+            const pixelSize = 8;
+            
+            function drawPixelated() {
+                if (videoElement.paused || videoElement.ended) return;
+                
+                // 缩小图像
+                ctx.drawImage(videoElement, 0, 0, width/pixelSize, height/pixelSize);
+                // 放大回原始尺寸
+                ctx.imageSmoothingEnabled = false;
+                ctx.drawImage(canvas, 0, 0, width/pixelSize, height/pixelSize, 0, 0, width, height);
+                
+                requestAnimationFrame(drawPixelated);
+            }
+            
+            videoElement.addEventListener('play', drawPixelated);
+        }
+    </script>
+</body>
+</html>
