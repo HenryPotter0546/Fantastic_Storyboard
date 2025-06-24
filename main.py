@@ -14,6 +14,12 @@ import os
 import uuid
 import base64
 import shutil
+from service import datamodels, auth, schemas
+from fastapi.security import OAuth2PasswordRequestForm
+from datetime import timedelta
+from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import Depends, status  
+from service.database import get_db
 
 # 配置日志
 logging.basicConfig(level=logging.INFO)
@@ -36,10 +42,66 @@ class SceneResponse(BaseModel):
     description: str
     image_url: str
 
+# --- 登录端点 ---
+@app.post("/token", response_model=schemas.Token)
+async def login_for_access_token(db: AsyncSession = Depends(get_db), form_data: OAuth2PasswordRequestForm = Depends()):
+    user = await auth.get_user(db, username=form_data.username)
+    if not user or not auth.verify_password(form_data.password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    access_token_expires = timedelta(minutes=auth.ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = auth.create_access_token(
+        data={"sub": user.username}, expires_delta=access_token_expires
+    )
+    return {"access_token": access_token, "token_type": "bearer"}
 
+# --- 注册端点 ---
+@app.post("/users/register", response_model=schemas.User)
+async def register_user(user: schemas.UserCreate, db: AsyncSession = Depends(get_db)):
+    """
+    处理用户注册请求。
+    FastAPI 会自动处理 Depends(get_db)，将一个可用的数据库会话 (AsyncSession) 赋值给 db 参数。
+    """
+    
+    # 1. 检查用户名是否已存在。将【正确的 db 对象】传递给 auth.get_user
+    db_user = await auth.get_user(db, username=user.username)
+    if db_user:
+        raise HTTPException(status_code=400, detail="Username already registered")
+    
+    # 2. 创建新用户
+    hashed_password = auth.get_password_hash(user.password)
+    # 注意：这里应该是 datamodels.User，因为你的模型文件是 datamodels.py
+    new_user = datamodels.User(username=user.username, hashed_password=hashed_password)
+    
+    # 3. 使用【正确的 db 对象】进行数据库操作
+    db.add(new_user)
+    await db.commit()
+    await db.refresh(new_user)
+    
+    return new_user
+
+# --- 获取当前用户信息端点 (受保护) ---
+@app.get("/users/me", response_model=schemas.User)
+async def read_users_me(current_user: datamodels.User = Depends(auth.get_current_user)):
+    return current_user
+
+# 强制登录页面
 @app.get("/", response_class=HTMLResponse)
-async def root():
+async def read_login_page():
+    return FileResponse("templates/login.html")
+
+# 登录后的主应用页面
+@app.get("/index", response_class=HTMLResponse)
+async def read_main_app():
     return FileResponse("templates/index.html")
+
+# 为了登录页面的 js 也能访问，修改 login 路由
+@app.get("/login", response_class=HTMLResponse)
+async def read_login_page_again():
+    return FileResponse("templates/login.html")
 
 
 @app.get("/available-models")
@@ -128,9 +190,47 @@ async def novel_to_comic_stream(
     guidance: float = 7.5,
     width: int = 512,
     height: int = 512,
+    db: AsyncSession = Depends(get_db),
+    current_user: datamodels.User = Depends(auth.get_current_user) # 保护该端点
 ):
+    """
+    处理小说到漫画的流式生成请求。
+    1. 验证用户身份。
+    2. 检查并扣除积分。
+    3. 调用核心生成器函数。
+    """
+    # 计算所需积分
+    required_credits = num_scenes * 100
+    if current_user.credits < required_credits:
+        # 这里不能直接 raise HTTPException，因为前端期望的是流式响应。
+        # 我们需要通过流发送一个错误消息。
+        async def insufficient_credits_stream():
+            error_data = {
+                "type": "error",
+                "message": f"积分不足。需要 {required_credits} 积分，但您只有 {current_user.credits}。"
+            }
+            yield f"data: {json.dumps(error_data)}\n\n"
+        
+        return StreamingResponse(insufficient_credits_stream(), media_type="text/event-stream")
+
+    # 在生成开始前扣除积分
+    current_user.credits -= required_credits
+    db.add(current_user)
+    await db.commit()
+    await db.refresh(current_user) # 刷新以获取数据库中的最新状态
+
+    # 调用独立的生成器函数，并将所有必要的参数传递给它
     return StreamingResponse(
-        generate_scenes(text, num_scenes, steps, guidance, width, height), 
+        generate_scenes(
+            text=text,
+            num_scenes=num_scenes,
+            steps=steps,
+            guidance=guidance,
+            width=width,
+            height=height,
+            db=db, # 传递 db 会话
+            current_user=current_user # 传递当前用户对象
+        ),
         media_type="text/event-stream"
     )
 
@@ -142,7 +242,11 @@ async def generate_scenes(
     guidance: float,
     width: int,
     height: int,
+    db: AsyncSession,          
+    current_user: datamodels.User,
 ):
+    logger.info(f"User {current_user.username} starting generation. Credits left: {current_user.credits}")
+
     session_id = str(uuid.uuid4())
     try:
         logger.info(f"开始处理请求, 参数: num_scenes={num_scenes}, steps={steps}, guidance={guidance}")
@@ -194,24 +298,6 @@ async def generate_scenes(
         for i, scene_cn in enumerate(scenes_cn):
             logger.info(f"处理第 {i+1}/{len(scenes_cn)} 个场景")
             try:
-                # 定义一个回调函数，用于在生成过程中发送进度
-                def progress_callback(step, timestep, latents):
-                    # 使用 nonlocal 来修改外部作用域的变量，确保我们能拿到正确的索引 i
-                    nonlocal i
-                    # 构造并发送进度数据
-                    progress_data = {
-                        "type": "progress",
-                        "index": i,
-                        "step": step + 1,
-                        "total_steps": steps,
-                    }
-                    loop = asyncio.get_event_loop()
-                    progress_data = {
-                        "type": "progress",
-                        "index": i,
-                        "step": step + 1,
-                        "total_steps": steps,
-                    }
                 queue = asyncio.Queue()
 
                 def progress_callback(step, timestep, latents):
@@ -293,9 +379,9 @@ async def generate_scenes(
         
         # 发送图片生成完成的消息，并包含会话ID
         yield f"data: {json.dumps({'type': 'all_images_generated', 'session_id': session_id})}\n\n"
-        
-        # 发送完成消息，以便前端正常关闭连接
-        yield f"data: {json.dumps({'type': 'complete'})}\n\n"
+
+        # 最新积分信息
+        yield f"data: {json.dumps({'type': 'complete', 'new_credit_balance': current_user.credits})}\n\n"
             
     except Exception as e:
         error_msg = f"错误: {str(e)}\n{traceback.format_exc()}"
@@ -377,4 +463,4 @@ async def create_video(request: dict):
 
 if __name__ == "__main__":
     logger.info("启动服务器...")
-    uvicorn.run(app, host="localhost", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8000)

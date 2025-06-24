@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>登录 - 小说转漫画服务</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 40px;
+            background-color: #f4f4f9;
+            color: #333;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 450px;
+            width: 100%;
+            margin: 0 auto;
+            background-color: #fff;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 4px A12px rgba(0, 0, 0, 0.08);
+            text-align: center;
+        }
+
+        h1, h2 {
+            color: #333;
+        }
+
+        input[type="text"],
+        input[type="password"] {
+            width: 100%;
+            padding: 12px;
+            margin: 10px 0;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            box-sizing: border-box;
+            font-size: 16px;
+        }
+
+        button {
+            width: 100%;
+            padding: 12px 20px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            cursor: pointer;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            transition: background-color 0.2s;
+            margin-top: 10px;
+        }
+
+        button:hover:not(:disabled) {
+            background-color: #0056b3;
+        }
+
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+
+        .form-switcher {
+            margin-top: 20px;
+            font-size: 14px;
+        }
+        
+        .form-switcher a {
+            color: #007bff;
+            text-decoration: none;
+            font-weight: bold;
+        }
+
+        .form-switcher a:hover {
+            text-decoration: underline;
+        }
+        
+        #message-box {
+            margin-top: 20px;
+            padding: 15px;
+            border: 1px solid;
+            border-radius: 8px;
+            text-align: center;
+            display: none; /* Initially hidden */
+        }
+        .error { color: #721c24; background-color: #f8d7da; border-color: #f5c6cb; }
+        .success { color: #155724; background-color: #d4edda; border-color: #c3e6cb; }
+        
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <img src="/static/ThePromisedLand.png" alt="项目标识"
+         style="max-width: 150px; display: block; margin: 0 auto 20px auto; border-radius: 8px;">
+    
+    <!-- 登录表单容器 -->
+    <div id="login-container">
+        <h2>欢迎回来</h2>
+        <form id="loginForm">
+            <input type="text" id="loginUser" placeholder="用户名" required>
+            <input type="password" id="loginPass" placeholder="密码" required>
+            <button type="submit">登录</button>
+        </form>
+        <div class="form-switcher">
+            <span>没有账户？ <a href="#" id="showRegisterLink">立即注册</a></span>
+        </div>
+    </div>
+
+    <!-- 注册表单容器 (默认隐藏) -->
+    <div id="register-container" style="display:none;">
+        <h2>创建新账户</h2>
+        <form id="registerForm">
+            <input type="text" id="regUser" placeholder="设置用户名" required>
+            <input type="password" id="regPass" placeholder="设置密码" required>
+            <button type="submit">注册</button>
+        </form>
+        <div class="form-switcher">
+            <span>已有账户？ <a href="#" id="showLoginLink">返回登录</a></span>
+        </div>
+    </div>
+
+    <!-- 用于显示反馈信息 -->
+    <div id="message-box"></div>
+</div>
+
+<script>
+    const loginContainer = document.getElementById('login-container');
+    const registerContainer = document.getElementById('register-container');
+    const showRegisterLink = document.getElementById('showRegisterLink');
+    const showLoginLink = document.getElementById('showLoginLink');
+    const messageBox = document.getElementById('message-box');
+
+    // --- 表单切换逻辑 ---
+    showRegisterLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        loginContainer.style.display = 'none';
+        registerContainer.style.display = 'block';
+        hideMessage();
+    });
+
+    showLoginLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        registerContainer.style.display = 'none';
+        loginContainer.style.display = 'block';
+        hideMessage();
+    });
+
+    function showMessage(message, type) {
+        messageBox.textContent = message;
+        messageBox.className = `message-box ${type}`;
+        messageBox.style.display = 'block';
+    }
+
+    function hideMessage() {
+        messageBox.style.display = 'none';
+    }
+
+    // --- 登录表单提交逻辑 ---
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const loginButton = e.target.querySelector('button');
+        loginButton.disabled = true;
+        loginButton.textContent = '登录中...';
+
+        // FastAPI 的 OAuth2PasswordRequestForm 需要 FormData 格式
+        const formData = new FormData();
+        formData.append('username', document.getElementById('loginUser').value);
+        formData.append('password', document.getElementById('loginPass').value);
+
+        try {
+            const response = await fetch('/token', {
+                method: 'POST',
+                body: formData
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                localStorage.setItem('accessToken', data.access_token);
+                window.location.href = '/index'; // 登录成功，跳转到主应用页面
+            } else {
+                const error = await response.json();
+                showMessage(error.detail || '登录失败，请检查用户名和密码。', 'error');
+            }
+        } catch (error) {
+            showMessage('网络错误，请稍后重试。', 'error');
+        } finally {
+            loginButton.disabled = false;
+            loginButton.textContent = '登录';
+        }
+    });
+    
+    // --- 注册表单提交逻辑 ---
+    document.getElementById('registerForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const registerButton = e.target.querySelector('button');
+        registerButton.disabled = true;
+        registerButton.textContent = '注册中...';
+
+        const userData = {
+            username: document.getElementById('regUser').value,
+            password: document.getElementById('regPass').value,
+        };
+
+        try {
+            const response = await fetch('/users/register', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(userData)
+            });
+
+            if (response.ok) {
+                showMessage('注册成功！请返回登录。', 'success');
+                // 自动切换回登录界面
+                setTimeout(() => {
+                    registerContainer.style.display = 'none';
+                    loginContainer.style.display = 'block';
+                    hideMessage();
+                }, 2000);
+            } else {
+                const error = await response.json();
+                showMessage(`注册失败: ${error.detail}`, 'error');
+            }
+        } catch (error) {
+            showMessage('网络错误，请稍后重试。', 'error');
+        } finally {
+            registerButton.disabled = false;
+            registerButton.textContent = '注册';
+        }
+    });
+
+    // 检查是否因为 token 失效被重定向回来
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('session') === 'expired') {
+        showMessage('您的会话已过期，请重新登录。', 'error');
+    }
+
+</script>
+</body>
+</html>
