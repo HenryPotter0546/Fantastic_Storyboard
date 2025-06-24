@@ -6,9 +6,15 @@
     <link rel="stylesheet" href="https://unpkg.com/nes.css/css/nes.min.css">
     <link href="https://fonts.googleapis.com/css?family=Press+Start+2P" rel="stylesheet">
     <style>
+        * {
+            image-rendering: pixelated;
+            image-rendering: -moz-crisp-edges;
+            image-rendering: crisp-edges;
+        }
+        
         body {
             font-family: 'Press Start 2P', cursive;
-            background-color: #f4f4f4;
+            background-color: #d3d3d3;
             margin: 0;
             padding: 20px;
             color: #212529;
@@ -23,30 +29,27 @@
             box-shadow: 8px 8px 0 rgba(0, 0, 0, 0.2);
         }
 
-        .logo {
-            display: block;
-            margin: 0 auto 30px auto;
-            max-width: 200px;
-            image-rendering: pixelated;
-        }
-
         h1 {
-            font-size: 24px;
+            font-size: 20px;
             margin-bottom: 30px;
             text-align: center;
             color: #212529;
+            text-shadow: 2px 2px 0 #999;
+            letter-spacing: 1px;
         }
 
         h3 {
-            font-size: 16px;
+            font-size: 14px;
             margin-bottom: 15px;
+            text-shadow: 1px 1px 0 #999;
         }
 
         .section-box {
             margin: 20px 0;
-            padding: 20px;
+            padding: 16px;
             border: 4px solid #212529;
             background-color: white;
+            box-shadow: 4px 4px 0 #666;
         }
 
         #result {
@@ -54,81 +57,78 @@
         }
 
         .scene {
-            margin: 30px 0;
-            padding: 20px;
+            margin: 20px 0;
+            padding: 16px;
             border: 4px solid #212529;
             background-color: white;
             position: relative;
+            box-shadow: 4px 4px 0 #666;
         }
 
-        .scene h3 {
-            color: #212529;
-            margin-bottom: 15px;
-        }
-
-        .scene p {
-            color: #666;
-            line-height: 1.6;
-            margin-bottom: 15px;
+        .scene-desc {
             font-size: 12px;
+            line-height: 1.5;
+            margin: 10px 0;
+            min-height: 60px;
         }
 
-        .scene img {
+        .progress-container {
+            width: 100%;
+            background-color: #e9ecef;
+            border: 3px solid #212529;
+            margin: 10px 0;
+            height: 20px;
+            box-shadow: 2px 2px 0 #666;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background-color: #007bff;
+            color: white;
+            text-align: center;
+            font-size: 10px;
+            text-shadow: 1px 1px 0 #333;
+            transition: width 0.3s;
+        }
+
+        .image-wrapper {
+            position: relative;
+            margin: 15px 0;
+            display: none;
+        }
+
+        .scene-image {
             max-width: 100%;
             border: 4px solid #212529;
-            image-rendering: pixelated;
-            margin-bottom: 15px;
+            box-shadow: 4px 4px 0 #666;
+            background-color: white;
+        }
+
+        .image-status {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 3px 6px;
+            font-size: 8px;
+            border: 2px solid white;
+            box-shadow: 2px 2px 0 #333;
+            display: none;
         }
 
         .image-actions {
-            margin-top: 15px;
             text-align: center;
-        }
-
-        .current-model-info {
-            background-color: #e3f2fd;
-            padding: 10px;
-            border-left: 4px solid #212529;
-            margin-bottom: 15px;
-        }
-
-        .model-selection-area {
+            margin-top: 10px;
             display: none;
-            margin-top: 15px;
-            padding: 15px;
-            background-color: #fff3cd;
-            border: 4px solid #212529;
-        }
-
-        .model-controls {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-            align-items: center;
-        }
-
-        .loading-spinner {
-            display: inline-block;
-            width: 16px;
-            height: 16px;
-            border: 2px solid #f3f3f3;
-            border-top: 2px solid #212529;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin-right: 8px;
-            image-rendering: pixelated;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
         }
 
         .message-box {
-            padding: 10px;
+            border: 3px solid;
+            font-size: 10px;
+            padding: 8px;
             margin: 10px 0;
-            border: 4px solid;
-            font-size: 12px;
+            box-shadow: 2px 2px 0 #666;
         }
 
         .error {
@@ -153,58 +153,19 @@
 
         .param-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-            gap: 15px;
-        }
-
-        .param-item {
-            display: flex;
-            flex-direction: column;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 12px;
         }
 
         .param-item label {
-            margin-bottom: 5px;
-            font-size: 12px;
-        }
-
-        .progress-bar-container {
-            width: 100%;
-            background-color: #e9ecef;
-            border: 4px solid #212529;
-            margin: 15px 0;
-            height: 20px;
-            overflow: hidden;
-        }
-
-        .progress-bar {
-            width: 0%;
-            height: 100%;
-            background-color: #007bff;
-            color: white;
-            transition: width 0.3s ease;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 12px;
-            font-weight: bold;
-        }
-
-        .image-status {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            padding: 5px 10px;
-            background-color: rgba(0, 0, 0, 0.7);
-            color: white;
             font-size: 10px;
-            border: 2px solid white;
-            display: none;
+            margin-bottom: 4px;
+            display: block;
         }
     </style>
 </head>
 <body>
 <div class="container">
-    
     <h1>小说转漫画服务</h1>
     
     <div class="nes-field">
@@ -213,21 +174,21 @@
 
     <div class="section-box">
         <h3>模型管理</h3>
-        <div id="currentModelInfo" class="current-model-info" style="display: none;">
+        <div id="currentModelInfo" style="display: none;">
             <div style="display: flex; justify-content: space-between; align-items: center;">
                 <span id="currentModelText"></span>
                 <button id="changeModelBtn" class="nes-btn is-warning" onclick="showModelSelection()">切换模型</button>
             </div>
         </div>
-        <div id="modelSelectionArea" class="model-selection-area">
-            <div class="model-controls">
+        <div id="modelSelectionArea" style="display: none;">
+            <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center;">
                 <label for="modelSelect">选择新模型:</label>
                 <select id="modelSelect" class="nes-select"></select>
                 <button id="confirmModelBtn" class="nes-btn is-primary" onclick="confirmModel()" disabled>确认加载</button>
                 <button class="nes-btn is-error" onclick="hideModelSelection()">取消</button>
             </div>
         </div>
-        <div id="initialModelSelection" class="model-controls">
+        <div id="initialModelSelection" style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center;">
             <label for="initialModelSelect">选择模型:</label>
             <select id="initialModelSelect" class="nes-select"></select>
             <button id="initialConfirmBtn" class="nes-btn is-primary" onclick="confirmInitialModel()" disabled>确认加载</button>
@@ -238,23 +199,23 @@
     <div class="section-box">
         <h3>生成参数</h3>
         <div class="param-grid">
-            <div class="param-item">
+            <div>
                 <label for="numScenes">场景数量</label>
                 <input type="number" id="numScenes" class="nes-input" value="10" min="1" max="20">
             </div>
-            <div class="param-item">
+            <div>
                 <label for="steps">迭代步数</label>
                 <input type="number" id="steps" class="nes-input" value="30" min="10" max="100">
             </div>
-            <div class="param-item">
+            <div>
                 <label for="guidance">引导系数</label>
                 <input type="number" id="guidance" class="nes-input" value="7.5" min="1" max="20" step="0.5">
             </div>
-            <div class="param-item">
+            <div>
                 <label for="width">图片宽度</label>
                 <input type="number" id="width" class="nes-input" value="512" min="256" max="1024" step="64">
             </div>
-            <div class="param-item">
+            <div>
                 <label for="height">图片高度</label>
                 <input type="number" id="height" class="nes-input" value="512" min="256" max="1024" step="64">
             </div>
@@ -468,14 +429,15 @@
                 sceneDiv.id = `scene-${i}`;
                 sceneDiv.innerHTML = `
                     <h3>场景 ${i + 1}</h3>
-                    <p id="desc-${i}" style="color: #888;"><i>等待场景描述...</i></p>
-                    <div class="progress-bar-container">
+                    <p id="desc-${i}" class="scene-desc"><i>等待场景描述...</i></p>
+                    <div class="progress-container">
                         <div class="progress-bar" id="progress-bar-${i}">等待中...</div>
                     </div>
-                    <div class="image-container" id="image-container-${i}" style="display:none;">
-                        
+                    <div class="image-wrapper" id="image-wrapper-${i}">
+                        <img id="image-${i}" class="scene-image" alt="场景 ${i + 1}">
+                        <div class="image-status" id="status-${i}">✓ 已生成</div>
                     </div>
-                    <div class="image-actions" id="actions-${i}" style="display:none;">
+                    <div class="image-actions" id="actions-${i}">
                         <button class="nes-btn is-warning" onclick="regenerateImage(${i})">重新生成</button>
                     </div>
                 `;
@@ -511,15 +473,33 @@
                 case 'scene': {
                     scenesDone++;
                     const { index, description, image_url } = data;
-                    document.getElementById(`desc-${index}`).innerHTML = description;
-                    const progressBarContainer = document.getElementById(`progress-bar-${index}`).parentElement;
-                    progressBarContainer.style.display = 'none';
-
-                    const imageContainer = document.getElementById(`image-container-${index}`);
-                    imageContainer.style.display = 'block';
-                    imageContainer.querySelector('img').src = image_url;
-                    document.getElementById(`actions-${index}`).style.display = 'block';
                     
+                    // 更新描述
+                    const descElement = document.getElementById(`desc-${index}`);
+                    if(descElement) descElement.innerHTML = description;
+                    
+                    // 隐藏进度条
+                    const progressContainer = document.getElementById(`progress-bar-${index}`).parentElement;
+                    if(progressContainer) progressContainer.style.display = 'none';
+                    
+                    // 显示图片
+                    const imageWrapper = document.getElementById(`image-wrapper-${index}`);
+                    const imgElement = document.getElementById(`image-${index}`);
+                    const statusElement = document.getElementById(`status-${index}`);
+                    
+                    if(imgElement && image_url) {
+                        imgElement.src = image_url;
+                        imgElement.onload = function() {
+                            imageWrapper.style.display = 'block';
+                            statusElement.style.display = 'block';
+                        };
+                    }
+                    
+                    // 显示操作按钮
+                    const actionsElement = document.getElementById(`actions-${index}`);
+                    if(actionsElement) actionsElement.style.display = 'block';
+                    
+                    // 更新进度信息
                     const elapsedTime = (Date.now() - startTime) / 1000;
                     const avgTimePerScene = elapsedTime / scenesDone;
                     const remainingScenes = totalScenes - scenesDone;
@@ -550,7 +530,7 @@
                                 videoLink.className = 'nes-btn is-success';
                                 videoLink.style.display = 'block';
                                 videoLink.style.marginTop = '20px';
-                                videoLink.style.fontSize = '14px';
+                                videoLink.style.fontSize = '12px';
                                 createVideoBtn.replaceWith(videoLink);
                             } else {
                                 showModelStatus('视频生成失败: ' + result.message, 'error');
