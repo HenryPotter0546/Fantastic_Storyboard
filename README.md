@@ -1,27 +1,22 @@
 # 小说转漫画服务 (本地Diffusion版本)
 
-这是一个基于本地部署的Stable Diffusion模型的小说转漫画服务，可以将小说文本转换为漫画风格的图片。
-
 ## 功能特点
-
-- 🎨 使用本地部署的Stable Diffusion模型生成图片
+- 🎨 使用本地Stable Diffusion模型生成图片
 - 📖 支持中文小说文本输入
-- 🖼️ 自动分割场景并生成对应的漫画图片
-- 🌐 提供Web界面进行交互
-- ⚡ 实时流式生成，支持边生成边显示
+- 🖼️ 自动分割场景生成漫画
+- 🌐 提供Web界面交互
+- ⚡ 实时流式生成
 
 ## 系统要求
-
-- Python 3.8+
-- CUDA支持的GPU（推荐，用于加速图片生成）
-- 至少8GB内存（推荐16GB+）
-- 至少10GB可用磁盘空间（用于存储模型）
+- **Python**: 3.8+
+- **GPU**: CUDA支持(推荐)
+- **内存**: 8GB+(推荐16GB)
+- **存储**: 10GB+可用空间
 
 ## 安装步骤
-
 1. 克隆项目
 ```bash
-https://github.com/HenryPotter0546/cs_group_project.git
+git clone https://github.com/HenryPotter0546/cs_group_project.git
 cd cs_group_project
 ```
 
@@ -30,75 +25,107 @@ cd cs_group_project
 pip install -r requirements.txt
 ```
 
-3. 配置环境变量
+3. 配置环境
 ```bash
-.env
-# 编辑.env文件，填入你的DeepSeek API密钥
+cp .env.example .env
+# 编辑.env文件配置API密钥
 ```
 
 4. 启动服务
 ```bash
 python main.py
 ```
+访问: http://localhost:8000
 
-服务将在 http://localhost:8000 启动
-
-## 环境变量配置
-
-在`.env`文件中配置以下变量：
-
-- `DEEPSEEK_API_KEY`: DeepSeek API密钥（用于文本处理和翻译）
-
-
-在`model.yaml`文件中配置好本地模型的路经，例如：
+## Ngrok公网访问
+1. 下载客户端
 ```bash
+# Linux/macOS
+curl -O https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-linux-amd64.tgz
+tar xzf ngrok-*.tgz
+
+# Windows: https://ngrok.com/download 官网下载
+```
+
+2. 认证配置
+```bash
+./ngrok config add-authtoken YOUR_TOKEN
+```
+
+3. 启动转发
+```bash
+./ngrok http 8000 --host-header="localhost:8000"
+```
+
+4. 获取公网URL
+```bash
+curl http://localhost:4040/api/tunnels | jq
+```
+5. 测试环境说明
+
+我们使用了两台电脑进行测试：
+
+服务器电脑
+
+- 负责运行AI模型生成漫画
+
+转发电脑
+
+- 负责把内网服务转发到公网
+- 安装并运行Ngrok：
+
+注意事项
+
+- 两台电脑需要在同一个局域网内
+- 服务器电脑需要一直保持运行
+- Ngrok免费版每2小时需要重新启动
+- 建议使用网线连接，WiFi可能不稳定
+
+## 模型配置
+编辑`model.yaml`:
+```yaml
 Unstable:
-  path: "/home/henry/workspace/model_checkpoint/unstable_sdxl"
-  single_files: false
-  use_safetensors: false
+  path: "/path/to/model"
   type: "sdxl"
 ```
-## 使用方法
 
-1. 打开浏览器访问 http://localhost:8000
-2. 在文本框中输入小说内容
-3. 设置要生成的场景数量（1-20）
-4. 选择模型（最好选unstable）
-5. 点击"生成漫画"按钮
-6. 等待图片生成完成
-
-## 运行示例
-
-![运行示例](screenshots/example_one.png)
-
-## 生成视频
-请提前在本地安装 ffmpeg
+## 使用说明
+1. 访问本地/公网URL
+2. 输入小说文本
+3. 设置场景数(1-20)
+4. 选择模型(unstable最佳)
+5. 点击生成
 
 ## 技术架构
-
-- **后端**: FastAPI
-- **AI模型**: Stable Diffusion (本地部署)
-- **文本处理**: DeepSeek API
-- **前端**: HTML + JavaScript (Server-Sent Events)
+| 组件 | 技术 |
+|-------|------|
+| 后端 | FastAPI |
+| AI模型 | Stable Diffusion |
+| 前端 | HTML+JS(SSE) |
+| 公网 | Ngrok隧道 |
 
 ## 注意事项
+⚠️ **重要提示**:
+- 首次运行需下载模型(耗时)
+- GPU显著提升生成速度
+- Ngrok免费版2小时限制
+- 商用需授权
 
-- 首次运行时会下载Diffusion模型，可能需要较长时间
-- 图片生成速度取决于GPU性能
-- 建议使用CUDA支持的GPU以获得更好的性能
-- 生成的图片为512x512像素
-
-## 故障排除
-
-1. **CUDA内存不足**: 减少batch_size或使用CPU模式
-2. **模型下载失败**: 检查网络连接，或手动下载模型
-3. **API调用失败**: 检查DeepSeek API密钥是否正确
+## 故障排查
+| 问题 | 解决方案 |
+|------|----------|
+| CUDA内存不足 | 减小batch_size |
+| 模型下载失败 | 检查网络/手动下载 |
+| Ngrok连接失败 | 检查防火墙/令牌 |
 
 ## 贡献者
-
-Weiheng Li, Sheng Wang, Jingwei Zeng, Xiaoyu Zhuang, Yihao Wang
+- Weiheng Li
+- Sheng Wang  
+- Jingwei Zeng
+- Xiaoyu Zhuang
+- Yihao Wang
 
 ## 许可证
-
-MIT License
-如需商用请联系henrypotterheng@gmail.com
+MIT License  
+商用联系: henrypotterheng@gmail.com
+```
