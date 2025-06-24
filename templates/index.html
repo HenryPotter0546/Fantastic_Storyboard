@@ -4,20 +4,59 @@
     <meta charset="UTF-8">
     <title>小说转漫画服务</title>
     <link rel="stylesheet" href="https://unpkg.com/nes.css/css/nes.min.css">
+    <!-- Press Start 2P for English/numbers -->
     <link href="https://fonts.googleapis.com/css?family=Press+Start+2P" rel="stylesheet">
     <style>
-        * {
-            image-rendering: pixelated;
-            image-rendering: -moz-crisp-edges;
-            image-rendering: crisp-edges;
+        /* Load Zpix pixel font for Chinese */
+        @font-face {
+            font-family: 'Zpix';
+            src: url('zpix.ttf') format('truetype'),
+                 url('zpix.woff2') format('woff2');
+            unicode-range: U+4E00-9FFF;
+            font-display: swap;
         }
-        
+
         body {
-            font-family: 'Press Start 2P', cursive;
+            font-family: 'Zpix', 'Press Start 2P', sans-serif;
             background-color: #d3d3d3;
             margin: 0;
             padding: 20px;
             color: #212529;
+        }
+
+        /* 英文和数字使用 Press Start 2P */
+        input, 
+        textarea,
+        .nes-select,
+        .nes-input,
+        .nes-progress,
+        .nes-badge,
+        .nes-balloon,
+        .nes-container,
+        .nes-table,
+        .nes-list,
+        .nes-field > label,
+        .nes-radio > span,
+        .nes-checkbox > span,
+        .progress-bar {
+            font-family: 'Press Start 2P', sans-serif;
+        }
+
+        /* 按钮和下拉选项使用混合字体 */
+        button, .nes-btn, .nes-select option {
+            font-family: 'Press Start 2P', 'Zpix', sans-serif;
+        }
+
+        /* 中文使用 Zpix */
+        .zh-font,
+        h1, h2, h3, h4, h5, h6,
+        p, li, td, th,
+        .message-box,
+        .scene-desc,
+        button span, /* 按钮中的文字 */
+        .nes-btn,    /* 按钮文字 */
+        .nes-select option /* 下拉选项文字 */ {
+            font-family: 'Zpix', sans-serif;
         }
 
         .container {
