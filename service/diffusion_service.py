@@ -10,13 +10,15 @@ import yaml
 from dotenv import load_dotenv
 import ffmpeg
 import shutil
-from typing import List
-from typing import Callable, Optional
+from typing import List, Optional, Callable
+import psutil
+import GPUtil
+from queue import Queue
+from threading import Lock
 
 load_dotenv()
 
 logger = logging.getLogger(__name__)
-
 
 class LocalDiffusionService:
     def __init__(self, model_name: str = None):
@@ -24,10 +26,67 @@ class LocalDiffusionService:
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.pipeline = None
         self.model_config = None
+        self.task_queue = Queue()
+        self.active_tasks = {}
+        self.queue_lock = Lock()
+        self.resource_lock = Lock()
 
         # 如果指定了模型名称，立即加载配置
         if model_name:
             self.model_config = self._load_model_config()
+
+    def calculate_requirements(self, model: str, num_scenes: int, steps: int, width: int, height: int) -> dict:
+         # 确保参数为整数
+        num_scenes = int(num_scenes)
+        steps = int(steps)
+        width = int(width)
+        height = int(height)
+        """根据参数计算资源需求"""
+        # 模型基准资源需求 (VRAM in MB, RAM in MB, 基础时间 in seconds)
+        model_baselines = {
+            "unstable": {"vram": 5000, "ram": 3000, "base_time": 20},
+            "stable": {"vram": 4000, "ram": 2500, "base_time": 15},
+            "fast": {"vram": 3000, "ram": 2000, "base_time": 10}
+        }
+        
+        baseline = model_baselines.get(model, model_baselines["stable"])
+        
+        # VRAM计算: 基础 + 分辨率影响 + 步数影响
+        resolution_factor = (width * height) / (512 * 512)  # 相对于512x512的比例
+        vram = baseline["vram"] + (resolution_factor * 1000) + (steps / 30 * 500)
+        
+        # RAM计算: 基础 + 场景数量影响
+        ram = baseline["ram"] + (num_scenes * 200)
+        
+        # 时间估算: 基础时间 * 场景数量 * (步数/基准步数)
+        est_time = baseline["base_time"] * num_scenes * (steps / 30)
+        
+        return {
+            "vram": min(vram, 24000),  # 不超过24GB
+            "ram": min(ram, 16000),    # 不超过16GB
+            "estimated_time": est_time
+        }
+
+    def can_start_task(self, requirements: dict) -> bool:
+        """检查是否可以开始任务"""
+        with self.resource_lock:
+            # 检查GPU资源
+            try:
+                gpus = GPUtil.getGPUs()
+                if gpus:
+                    free_vram = gpus[0].memoryFree
+                    if free_vram < requirements["vram"]:
+                        return False
+                
+                # 检查系统内存
+                free_ram = psutil.virtual_memory().available / (1024 * 1024)  # MB
+                if free_ram < requirements["ram"]:
+                    return False
+                
+                return True
+            except Exception as e:
+                logger.error(f"资源检查失败: {str(e)}")
+                return False
 
     def set_model(self, model_name: str):
         """设置要使用的模型（不立即加载）"""

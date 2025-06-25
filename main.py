@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from service.deepseek_service import DeepSeekService
 from service.diffusion_service import LocalDiffusionService
 import asyncio
-from typing import List
+from typing import List, Dict
 from fastapi.responses import HTMLResponse, StreamingResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 import traceback
@@ -14,6 +14,11 @@ import os
 import uuid
 import base64
 import shutil
+import psutil
+import GPUtil
+from queue import Queue
+from threading import Lock
+import time
 
 # 配置日志
 logging.basicConfig(level=logging.INFO)
@@ -26,6 +31,63 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 # 创建全局的diffusion服务实例
 diffusion_service = LocalDiffusionService()
 
+# 资源队列管理
+class ResourceManager:
+    def __init__(self):
+        self.task_queue = Queue()
+        self.active_tasks = {}
+        self.queue_lock = Lock()
+        self.resource_lock = Lock()
+        
+    def calculate_requirements(self, model: str, num_scenes: int, steps: int, width: int, height: int) -> Dict:
+        """根据参数计算资源需求"""
+        # 模型基准资源需求 (VRAM in MB, RAM in MB, 基础时间 in seconds)
+        model_baselines = {
+            "unstable": {"vram": 5000, "ram": 3000, "base_time": 20},
+            "stable": {"vram": 4000, "ram": 2500, "base_time": 15},
+            "fast": {"vram": 3000, "ram": 2000, "base_time": 10}
+        }
+        
+        baseline = model_baselines.get(model, model_baselines["stable"])
+        
+        # VRAM计算: 基础 + 分辨率影响 + 步数影响
+        resolution_factor = (width * height) / (512 * 512)  # 相对于512x512的比例
+        vram = baseline["vram"] + (resolution_factor * 1000) + (steps / 30 * 500)
+        
+        # RAM计算: 基础 + 场景数量影响
+        ram = baseline["ram"] + (num_scenes * 200)
+        
+        # 时间估算: 基础时间 * 场景数量 * (步数/基准步数)
+        est_time = baseline["base_time"] * num_scenes * (steps / 30)
+        
+        return {
+            "vram": min(vram, 24000),  # 不超过24GB
+            "ram": min(ram, 16000),    # 不超过16GB
+            "estimated_time": est_time
+        }
+
+    def can_start_task(self, requirements: Dict) -> bool:
+        """检查是否可以开始任务"""
+        with self.resource_lock:
+            # 检查GPU资源
+            try:
+                gpus = GPUtil.getGPUs()
+                if gpus:
+                    free_vram = gpus[0].memoryFree
+                    if free_vram < requirements["vram"]:
+                        return False
+                
+                # 检查系统内存
+                free_ram = psutil.virtual_memory().available / (1024 * 1024)  # MB
+                if free_ram < requirements["ram"]:
+                    return False
+                
+                return True
+            except Exception as e:
+                logger.error(f"资源检查失败: {str(e)}")
+                return False
+
+resource_manager = ResourceManager()
 
 class NovelRequest(BaseModel):
     text: str
@@ -120,6 +182,84 @@ async def get_model_status():
         return {"is_loaded": False, "current_model": None, "message": str(e)}
 
 
+@app.post("/check-resources")
+async def check_resources(request: dict):
+    try:
+        # 确保所有参数转换为整数
+        model = request.get("model")
+        num_scenes = int(request.get("num_scenes", 10))
+        steps = int(request.get("steps", 30))
+        width = int(request.get("width", 512))
+        height = int(request.get("height", 512))
+        
+        if not model:
+            raise HTTPException(status_code=400, detail="Missing model parameter")
+            
+        requirements = resource_manager.calculate_requirements(
+            model, num_scenes, steps, width, height
+        )
+        
+        with resource_manager.queue_lock:
+            queue_positions = list(resource_manager.task_queue.queue)
+            position = next((i for i, t in enumerate(queue_positions) 
+                           if t["model"] == model and 
+                           t["num_scenes"] == num_scenes and
+                           t["steps"] == steps and
+                           t["width"] == width and
+                           t["height"] == height), -1)
+            
+            can_start = resource_manager.can_start_task(requirements) and position <= 0
+            
+            return {
+                "can_start": can_start,
+                "position": position + 1 if position != -1 else 0,
+                "queue_size": resource_manager.task_queue.qsize(),
+                "estimated_wait": sum(t["estimated_time"] for t in queue_positions[:position]) if position > 0 else 0,
+                "requirements": requirements
+            }
+            
+    except Exception as e:
+        logger.error(f"检查资源失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/enqueue-task")
+async def enqueue_task(request: dict):
+    """将任务加入队列"""
+    try:
+        model = request.get("model")
+        num_scenes = request.get("num_scenes", 10)
+        steps = request.get("steps", 30)
+        width = request.get("width", 512)
+        height = request.get("height", 512)
+        
+        if not model:
+            raise HTTPException(status_code=400, detail="Missing model parameter")
+            
+        requirements = resource_manager.calculate_requirements(
+            model, num_scenes, steps, width, height
+        )
+        
+        task = {
+            "model": model,
+            "num_scenes": num_scenes,
+            "steps": steps,
+            "width": width,
+            "height": height,
+            "estimated_time": requirements["estimated_time"]
+        }
+        
+        with resource_manager.queue_lock:
+            resource_manager.task_queue.put(task)
+            return {
+                "queue_size": resource_manager.task_queue.qsize(),
+                "estimated_wait": sum(t["estimated_time"] for t in list(resource_manager.task_queue.queue)[:-1])
+            }
+            
+    except Exception as e:
+        logger.error(f"加入队列失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/novel-to-comic-stream")
 async def novel_to_comic_stream(
     text: str,
@@ -179,7 +319,7 @@ async def generate_scenes(
                 return
 
         # 分割场景（得到中文描述）
-        logger.info("向前端发送“开始分割场景”...")
+        logger.info("向前端发送'开始分割场景'...")
         yield f"data: {json.dumps({'type': 'info', 'message': '正在分割场景，这可能需要一些时间...'})}\n\n"
 
         logger.info("开始分割场景")
