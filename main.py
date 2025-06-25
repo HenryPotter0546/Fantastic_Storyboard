@@ -20,6 +20,7 @@ from datetime import timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import Depends, status  
 from service.database import get_db
+from service.baidu_translate import BaiduTranslateService
 
 # 配置日志
 logging.basicConfig(level=logging.INFO)
@@ -261,6 +262,9 @@ async def generate_scenes(
         # 初始化服务
         logger.info("初始化服务...")
         deepseek = DeepSeekService()
+
+        # 初始化百度翻译
+        baidu = BaiduTranslateService()
         
         # 检查是否已设置模型
         if diffusion_service.model_name is None:
@@ -286,18 +290,10 @@ async def generate_scenes(
         logger.info("向前端发送“开始分割场景”...")
         yield f"data: {json.dumps({'type': 'info', 'message': '正在分割场景，这可能需要一些时间...'})}\n\n"
         logger.info("开始分割场景")
-
-        loop = asyncio.get_event_loop()
-        # loop.run_in_executor 会将同步函数 deepseek.split_into_scenes_cn 
-        # 放到一个独立的线程池中执行，这样它就不会阻塞主事件循环了。
-        scenes_cn = await loop.run_in_executor(
-            None,  # 使用默认的线程池执行器
-            deepseek.split_into_scenes_cn,
-            text,
-            num_scenes
-        )
         
+        scenes_cn =  await deepseek.split_into_scenes_cn(text, num_scenes)
         logger.info(f"场景分割完成，共 {len(scenes_cn)} 个场景")
+
         # 发送场景总数，以便前端初始化
         yield f"data: {json.dumps({'type': 'start', 'total_scenes': len(scenes_cn)})}\n\n"
         
@@ -318,7 +314,9 @@ async def generate_scenes(
                         pass
 
                 # 将中文场景描述翻译成英文prompt
-                english_prompt = deepseek.translate_to_english(scene_cn)
+                english_prompt = await deepseek.translate_to_english(scene_cn)
+                # english_prompt = await baidu.translate_to_english(scene_cn)
+
                 logger.info(f"场景翻译完成: {english_prompt}")
 
                 # 构建适合本地diffusion的英文提示词

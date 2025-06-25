@@ -1,5 +1,5 @@
 import os
-import requests
+import httpx
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -11,8 +11,10 @@ class DeepSeekService:
             raise ValueError("未设置 DEEPSEEK_API_KEY 环境变量")
             
         self.api_url = "https://api.deepseek.com/v1/chat/completions"
+        # 创建一个可复用的异步客户端实例
+        self.client = httpx.AsyncClient(timeout=60.0) # 60s超时时间
         
-    def translate_to_english(self, text: str) -> str:
+    async def translate_to_english(self, text: str) -> str:
         """将中文文本翻译成英文"""
         prompt = f"""请将以下中文文本翻译成英文，保持描述的准确性和艺术性。
         要求：
@@ -47,7 +49,7 @@ class DeepSeekService:
         }
         
         try:
-            response = requests.post(self.api_url, headers=headers, json=data)
+            response = await self.client.post(self.api_url, headers=headers, json=data)
             response.raise_for_status()
             
             result = response.json()
@@ -59,17 +61,13 @@ class DeepSeekService:
             translated_text = translated_text.split('\n')[0].strip()
             return translated_text
             
-        except requests.exceptions.RequestException as e:
-            error_detail = ""
-            try:
-                error_detail = response.json()
-            except:
-                error_detail = response.text
-            raise Exception(f"调用DeepSeek API翻译失败: {str(e)}\n错误详情: {error_detail}")
+        # 捕获 httpx 异常
+        except httpx.RequestError as e:
+            raise Exception(f"调用DeepSeek API翻译失败: {str(e)}")
         except (KeyError, IndexError) as e:
             raise Exception(f"解析API响应失败: {str(e)}")
             
-    def split_into_scenes(self, novel_text, num_scenes=10):
+    async def split_into_scenes(self, novel_text, num_scenes=10):
         """将小说文本分割成场景描述"""
         prompt = f"""作为一个为小说配图的工作者，请将以下小说文本分割成{num_scenes}个场景，每个场景用一段简短的描述概括，适合用于生成漫画分镜。
 
@@ -136,7 +134,7 @@ class DeepSeekService:
         }
         
         try:
-            response = requests.post(self.api_url, headers=headers, json=data)
+            response = await self.client.post(self.api_url, headers=headers, json=data)
             response.raise_for_status()
             
             result = response.json()
@@ -146,7 +144,7 @@ class DeepSeekService:
             scenes = result['choices'][0]['message']['content'].split('\n')
             return [scene.strip() for scene in scenes if scene.strip()]
             
-        except requests.exceptions.RequestException as e:
+        except httpx.RequestError as e:
             error_detail = ""
             try:
                 error_detail = response.json()
@@ -156,7 +154,7 @@ class DeepSeekService:
         except (KeyError, IndexError) as e:
             raise Exception(f"解析API响应失败: {str(e)}")
 
-    def split_into_scenes_cn(self, novel_text, num_scenes=10):
+    async def split_into_scenes_cn(self, novel_text, num_scenes=10):
         """
         将小说文本分割成num_scenes个场景，每个场景用一段50-100字的中文完整句子描述。
         """
@@ -185,14 +183,14 @@ class DeepSeekService:
             "stream": False
         }
         try:
-            response = requests.post(self.api_url, headers=headers, json=data)
+            response = await self.client.post(self.api_url, headers=headers, json=data)
             response.raise_for_status()
             result = response.json()
             if 'choices' not in result or not result['choices']:
                 raise Exception("API返回的数据格式不正确")
             scenes = result['choices'][0]['message']['content'].split('\n')
             return [scene.strip() for scene in scenes if scene.strip()]
-        except requests.exceptions.RequestException as e:
+        except httpx.RequestError as e:
             error_detail = ""
             try:
                 error_detail = response.json()
