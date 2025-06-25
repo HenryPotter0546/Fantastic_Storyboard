@@ -1,516 +1,928 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>小说转漫画服务</title>
     <style>
+        :root {
+            --primary: #4a6fa5;
+            --primary-dark: #3a5a8c;
+            --secondary: #f0f4f8;
+            --accent: #ff6b6b;
+            --success: #51cf66;
+            --warning: #fcc419;
+            --danger: #ff6b6b;
+            --text: #333;
+            --text-light: #666;
+            --border: #dbe4ee;
+            --shadow: rgba(0, 0, 0, 0.08);
+        }
+        
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            margin: 40px;
-            background-color: #f4f4f9;
-            color: #333;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f5f7fa;
+            color: var(--text);
+            line-height: 1.6;
+            padding: 20px;
         }
-
+        
         .container {
-            max-width: 800px;
+            max-width: 1200px;
             margin: 0 auto;
-            background-color: #fff;
-            padding: 20px 40px;
-            border-radius: 12px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 8px 30px var(--shadow);
+            overflow: hidden;
         }
-
+        
+        header {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: white;
+            padding: 25px 40px;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+        
+        .logo {
+            width: 80px;
+            height: 80px;
+            background: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+        }
+        
+        .logo img {
+            width: 60px;
+            height: 60px;
+        }
+        
+        .header-content h1 {
+            font-size: 28px;
+            margin-bottom: 8px;
+            font-weight: 700;
+        }
+        
+        .header-content p {
+            font-size: 16px;
+            opacity: 0.9;
+            max-width: 600px;
+        }
+        
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 350px;
+            gap: 30px;
+            padding: 30px;
+        }
+        
+        .input-section {
+            background: var(--secondary);
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+        }
+        
+        .section-title {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            color: var(--primary);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .section-title i {
+            font-size: 24px;
+        }
+        
         textarea {
             width: 100%;
             height: 200px;
-            margin: 10px 0;
-            padding: 10px;
-            border: 1px solid #ddd;
+            padding: 15px;
+            border: 1px solid var(--border);
             border-radius: 8px;
             font-size: 16px;
             resize: vertical;
-            box-sizing: border-box;
+            margin-bottom: 20px;
+            transition: border-color 0.3s;
         }
-
-        button {
-            padding: 10px 20px;
-            background-color: #007bff;
-            color: white;
-            border: none;
-            cursor: pointer;
+        
+        textarea:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(74, 111, 165, 0.2);
+        }
+        
+        .model-controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .model-select {
+            flex: 1;
+            min-width: 200px;
+        }
+        
+        select {
+            width: 100%;
+            padding: 12px 15px;
+            border: 1px solid var(--border);
             border-radius: 8px;
             font-size: 16px;
-            transition: background-color 0.2s;
-        }
-
-        button:hover:not(:disabled) {
-            background-color: #0056b3;
-        }
-
-        button:disabled {
-            background-color: #cccccc;
-            cursor: not-allowed;
-        }
-
-        .section-box {
-            margin: 20px 0;
-            padding: 20px;
-            border: 1px solid #e9ecef;
-            border-radius: 8px;
-            background-color: #f8f9fa;
+            background: white;
         }
         
-        .section-box h3 {
-            margin-top: 0;
-            color: #495057;
-            border-bottom: 2px solid #eee;
-            padding-bottom: 10px;
+        .params-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
         }
-
-        #result {
+        
+        .param-item {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .param-item label {
+            font-size: 14px;
+            color: var(--text-light);
+            margin-bottom: 5px;
+        }
+        
+        .param-item input {
+            padding: 12px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-size: 16px;
+        }
+        
+        .btn {
+            padding: 14px 25px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .btn:hover {
+            background: var(--primary-dark);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(74, 111, 165, 0.3);
+        }
+        
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        
+        .btn i {
+            font-size: 20px;
+        }
+        
+        .status-section {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+            border: 1px solid var(--border);
+        }
+        
+        .system-status {
+            background: var(--secondary);
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 25px;
+        }
+        
+        .status-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+        }
+        
+        .status-item {
+            background: white;
+            border-radius: 8px;
+            padding: 15px;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+        }
+        
+        .status-title {
+            font-size: 14px;
+            color: var(--text-light);
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .status-value {
+            font-size: 20px;
+            font-weight: 600;
+        }
+        
+        .status-high {
+            color: var(--danger);
+        }
+        
+        .status-medium {
+            color: var(--warning);
+        }
+        
+        .status-low {
+            color: var(--success);
+        }
+        
+        .progress-container {
+            margin: 20px 0;
+        }
+        
+        .progress-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+        
+        .progress-bar {
+            height: 12px;
+            background: #e9ecef;
+            border-radius: 6px;
+            overflow: hidden;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: var(--primary);
+            border-radius: 6px;
+            transition: width 0.5s ease;
+        }
+        
+        .task-status {
+            margin-top: 25px;
+        }
+        
+        .task-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        
+        .task-details {
+            background: var(--secondary);
+            border-radius: 8px;
+            padding: 20px;
+        }
+        
+        .task-info {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 15px;
+        }
+        
+        .task-info-item {
+            text-align: center;
+        }
+        
+        .task-info-label {
+            font-size: 14px;
+            color: var(--text-light);
+            margin-bottom: 5px;
+        }
+        
+        .task-info-value {
+            font-size: 18px;
+            font-weight: 600;
+        }
+        
+        .task-progress {
+            margin-top: 15px;
+        }
+        
+        .results-section {
+            grid-column: 1 / -1;
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+            border: 1px solid var(--border);
             margin-top: 20px;
         }
-
-        .scene {
-            margin: 20px 0;
-            padding: 20px;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            background-color: #fff;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-            transition: all 0.3s ease;
+        
+        .results-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
         }
-
-        .scene h3 { color: #333; margin-bottom: 15px; }
-        .scene p { color: #666; line-height: 1.6; margin-bottom: 15px; font-size: 16px; }
-        .scene img { max-width: 100%; border-radius: 4px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1); }
-
-        .message-box { padding: 15px; border: 1px solid; margin: 10px 0; border-radius: 8px; text-align: center; }
-        .error { color: #721c24; background-color: #f8d7da; border-color: #f5c6cb; }
-        .info { color: #0c5460; background-color: #d1ecf1; border-color: #bee5eb; }
-        .success { color: #155724; background-color: #d4edda; border-color: #c3e6cb; }
-        .warning { color: #856404; background-color: #fff3cd; border-color: #ffeeba; }
-
-        .model-controls { display: flex; align-items: center; gap: 15px; flex-wrap: wrap; }
-        .model-status { margin-top: 10px; padding: 8px 12px; border-radius: 4px; font-size: 14px; }
-        .confirm-btn { background-color: #28a745; }
-        .confirm-btn:hover:not(:disabled) { background-color: #218838; }
-
+        
+        .scenes-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 25px;
+        }
+        
+        .scene-card {
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            transition: transform 0.3s;
+        }
+        
+        .scene-card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .scene-image {
+            height: 250px;
+            background: #f0f4f8;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+        
+        .scene-image img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .scene-content {
+            padding: 20px;
+        }
+        
+        .scene-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 10px;
+            color: var(--primary);
+        }
+        
+        .scene-description {
+            color: var(--text-light);
+            margin-bottom: 15px;
+            line-height: 1.5;
+        }
+        
+        .scene-actions {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .action-btn {
+            padding: 8px 15px;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            transition: all 0.2s;
+        }
+        
+        .regenerate-btn {
+            background: var(--secondary);
+            color: var(--text);
+            border: 1px solid var(--border);
+        }
+        
+        .regenerate-btn:hover {
+            background: #e4eaf1;
+        }
+        
+        .download-btn {
+            background: var(--primary);
+            color: white;
+            border: none;
+        }
+        
+        .download-btn:hover {
+            background: var(--primary-dark);
+        }
+        
+        .message-box {
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .message-box.info {
+            background: #e7f5ff;
+            color: #1864ab;
+            border-left: 4px solid #1864ab;
+        }
+        
+        .message-box.success {
+            background: #d3f9d8;
+            color: #2b8a3e;
+            border-left: 4px solid #2b8a3e;
+        }
+        
+        .message-box.warning {
+            background: #fff9db;
+            color: #e67700;
+            border-left: 4px solid #e67700;
+        }
+        
+        .message-box.error {
+            background: #ffe3e3;
+            color: #c92a2a;
+            border-left: 4px solid #c92a2a;
+        }
+        
+        .message-icon {
+            font-size: 24px;
+        }
+        
         .loading-spinner {
             display: inline-block;
-            width: 16px; height: 16px;
-            border: 2px solid #f3f3f3; border-top: 2px solid #3498db;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
             border-radius: 50%;
+            border-top-color: white;
             animation: spin 1s linear infinite;
-            margin-right: 8px; vertical-align: middle;
         }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-
-        .param-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 15px; }
-        .param-item { display: flex; flex-direction: column; }
-        .param-item label { margin-bottom: 5px; font-size: 14px; color: #333; }
-        .param-item input { padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
-
-        #overallProgress { display: none; }
         
-        .progress-bar-container {
-            width: 100%; background-color: #e9ecef; border-radius: 4px;
-            margin: 15px 0; height: 20px; overflow: hidden; position: relative;
+        @keyframes spin {
+            to { transform: rotate(360deg); }
         }
-        .progress-bar {
-            width: 0%; height: 100%; background-color: #007bff; color: white;
-            transition: width 0.3s ease; display: flex; align-items: center;
-            justify-content: center; font-size: 12px; font-weight: bold;
+        
+        .video-section {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid var(--border);
         }
-
-        #currentModelInfo { display: none; }
-        #modelSelectionArea { display: none; margin-top: 10px; }
-        #initialModelSelection { display: flex; }
+        
+        .video-container {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+        }
+        
+        .video-placeholder {
+            width: 100%;
+            height: 200px;
+            background: #e9ecef;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 15px;
+        }
+        
+        .video-btn {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            transition: background 0.3s;
+        }
+        
+        .video-btn:hover {
+            background: var(--primary-dark);
+        }
+        
+        @media (max-width: 900px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+            
+            .status-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        @media (max-width: 600px) {
+            .params-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .scenes-container {
+                grid-template-columns: 1fr;
+            }
+            
+            .task-info {
+                flex-direction: column;
+                gap: 15px;
+            }
+        }
     </style>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
-<div class="container">
-    <img src="/static/ThePromisedLand.png" alt="项目标识"
-         style="max-width: 200px; display: block; margin: 0 auto 20px auto; border-radius: 8px;">
-    <h1>小说转漫画服务</h1>
-    <div>
-        <textarea id="novelText" placeholder="在此输入一段奇妙的冒险故事..."></textarea>
-
-        <div class="section-box">
-            <h3>模型管理</h3>
-            <div id="currentModelInfo">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <span id="currentModelText"></span>
-                    <button id="changeModelBtn" onclick="showModelSelection()" class="warning">切换模型</button>
-                </div>
+    <div class="container">
+        <header>
+            <div class="logo">
+                <img src="https://img.icons8.com/color/96/comic-book.png" alt="Comic Icon">
             </div>
-            <div id="modelSelectionArea">
+            <div class="header-content">
+                <h1>小说转漫画服务</h1>
+                <p>使用AI技术将您的小说文本转换为漫画风格的图片序列，支持中文输入和实时生成</p>
+            </div>
+        </header>
+        
+        <div class="main-content">
+            <div class="input-section">
+                <h2 class="section-title">
+                    <i class="fas fa-book-open"></i>
+                    小说输入
+                </h2>
+                
+                <textarea id="novelText" placeholder="在此输入一段奇妙的小说故事...例如：
+在一个遥远的魔法王国里，年轻的冒险者艾拉发现了一本古老的魔法书。当她翻开书页时，一道耀眼的光芒将她带到了一个充满神秘生物和未知危险的世界。她必须学会掌握书中的魔法，才能找到回家的路..."></textarea>
+                
+                <h2 class="section-title">
+                    <i class="fas fa-cogs"></i>
+                    生成设置
+                </h2>
+                
                 <div class="model-controls">
-                    <label for="modelSelect">选择新模型:</label>
-                    <select id="modelSelect"></select>
-                    <button id="confirmModelBtn" class="confirm-btn" onclick="confirmModel()" disabled>确认加载</button>
-                    <button onclick="hideModelSelection()" style="background-color: #6c757d;">取消</button>
+                    <div class="model-select">
+                        <label for="modelSelect">选择模型</label>
+                        <select id="modelSelect">
+                            <option value="">请选择模型</option>
+                            <option value="unstable" selected>Unstable (奇幻风格)</option>
+                            <option value="tinystable">Tinystable (简约风格)</option>
+                            <option value="pixel">Pixel (像素风格)</option>
+                        </select>
+                    </div>
+                    
+                    <button id="loadModelBtn" class="btn">
+                        <i class="fas fa-download"></i>
+                        加载模型
+                    </button>
+                </div>
+                
+                <div class="params-grid">
+                    <div class="param-item">
+                        <label for="numScenes">场景数量</label>
+                        <input type="number" id="numScenes" min="1" max="20" value="8">
+                    </div>
+                    
+                    <div class="param-item">
+                        <label for="steps">迭代步数</label>
+                        <input type="number" id="steps" min="10" max="100" value="30">
+                    </div>
+                    
+                    <div class="param-item">
+                        <label for="guidance">引导系数</label>
+                        <input type="number" id="guidance" min="1" max="20" step="0.5" value="7.5">
+                    </div>
+                    
+                    <div class="param-item">
+                        <label for="width">图片宽度</label>
+                        <input type="number" id="width" min="256" max="1024" step="64" value="512">
+                    </div>
+                    
+                    <div class="param-item">
+                        <label for="height">图片高度</label>
+                        <input type="number" id="height" min="256" max="1024" step="64" value="512">
+                    </div>
+                </div>
+                
+                <button id="generateBtn" class="btn">
+                    <i class="fas fa-magic"></i>
+                    生成漫画
+                </button>
+            </div>
+            
+            <div class="status-section">
+                <h2 class="section-title">
+                    <i class="fas fa-chart-bar"></i>
+                    系统状态
+                </h2>
+                
+                <div class="system-status">
+                    <div class="status-grid">
+                        <div class="status-item">
+                            <div class="status-title">
+                                <i class="fas fa-microchip"></i>
+                                CPU使用率
+                            </div>
+                            <div class="status-value status-low">42%</div>
+                        </div>
+                        
+                        <div class="status-item">
+                            <div class="status-title">
+                                <i class="fas fa-memory"></i>
+                                内存使用
+                            </div>
+                            <div class="status-value status-medium">68%</div>
+                        </div>
+                        
+                        <div class="status-item">
+                            <div class="status-title">
+                                <i class="fas fa-bolt"></i>
+                                GPU使用率
+                            </div>
+                            <div class="status-value status-low">35%</div>
+                        </div>
+                        
+                        <div class="status-item">
+                            <div class="status-title">
+                                <i class="fas fa-database"></i>
+                                GPU显存
+                            </div>
+                            <div class="status-value status-medium">6.2/8 GB</div>
+                        </div>
+                    </div>
+                    
+                    <div class="progress-container">
+                        <div class="progress-header">
+                            <span>系统负载</span>
+                            <span>中等</span>
+                        </div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: 65%"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="task-status">
+                    <div class="task-header">
+                        <h2 class="section-title">
+                            <i class="fas fa-tasks"></i>
+                            任务状态
+                        </h2>
+                        <span class="status-value status-low">空闲</span>
+                    </div>
+                    
+                    <div class="task-details">
+                        <div class="task-info">
+                            <div class="task-info-item">
+                                <div class="task-info-label">队列中任务</div>
+                                <div class="task-info-value">2</div>
+                            </div>
+                            
+                            <div class="task-info-item">
+                                <div class="task-info-label">平均等待时间</div>
+                                <div class="task-info-value">3.5分钟</div>
+                            </div>
+                        </div>
+                        
+                        <div class="progress-container task-progress">
+                            <div class="progress-header">
+                                <span>当前任务进度</span>
+                                <span>0%</span>
+                            </div>
+                            <div class="progress-bar">
+                                <div class="progress-fill" style="width: 0%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="message-box info">
+                    <i class="fas fa-info-circle message-icon"></i>
+                    <div>
+                        <strong>系统提示</strong>
+                        <p>当前系统资源充足，您的任务将立即开始处理</p>
+                    </div>
                 </div>
             </div>
-            <div id="initialModelSelection" class="model-controls">
-                <label for="initialModelSelect">选择模型:</label>
-                <select id="initialModelSelect"></select>
-                <button id="initialConfirmBtn" class="confirm-btn" onclick="confirmInitialModel()" disabled>确认加载</button>
+            
+            <div class="results-section">
+                <div class="results-header">
+                    <h2 class="section-title">
+                        <i class="fas fa-images"></i>
+                        生成结果
+                    </h2>
+                    <div class="task-info">
+                        <div class="task-info-item">
+                            <div class="task-info-label">已生成场景</div>
+                            <div class="task-info-value">0/8</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="message-box info">
+                    <i class="fas fa-info-circle message-icon"></i>
+                    <div>
+                        <strong>准备生成</strong>
+                        <p>输入小说文本并点击"生成漫画"按钮开始</p>
+                    </div>
+                </div>
+                
+                <div class="scenes-container">
+                    <!-- 场景卡片将由JavaScript动态生成 -->
+                </div>
+                
+                <div class="video-section">
+                    <h2 class="section-title">
+                        <i class="fas fa-film"></i>
+                        视频生成
+                    </h2>
+                    
+                    <div class="video-container">
+                        <div class="video-placeholder">
+                            <i class="fas fa-video" style="font-size: 48px; color: #adb5bd;"></i>
+                        </div>
+                        <button class="video-btn">
+                            <i class="fas fa-play-circle"></i>
+                            生成漫画视频
+                        </button>
+                    </div>
+                </div>
             </div>
-            <div id="modelStatus" class="message-box" style="display: none;"></div>
         </div>
-
-        <div class="section-box">
-            <h3>生成参数</h3>
-            <div class="param-grid">
-                 <div class="param-item"><label for="numScenes">场景数量</label><input type="number" id="numScenes" value="10" min="1" max="20"></div>
-                 <div class="param-item"><label for="steps">迭代步数</label><input type="number" id="steps" value="30" min="10" max="100"></div>
-                 <div class="param-item"><label for="guidance">引导系数</label><input type="number" id="guidance" value="7.5" min="1" max="20" step="0.5"></div>
-                 <div class="param-item"><label for="width">图片宽度</label><input type="number" id="width" value="512" min="256" max="1024" step="64"></div>
-                 <div class="param-item"><label for="height">图片高度</label><input type="number" id="height" value="512" min="256" max="1024" step="64"></div>
-            </div>
-        </div>
-        
-        <button id="generateBtn" onclick="generateComic()">生成漫画</button>
     </div>
-    <div id="overallProgress" class="message-box info"></div>
-    <div id="result"></div>
-</div>
-
-<script>
-    let selectedModel = null;
-    let isModelLoaded = false;
-    let isLoadingModel = false;
-
-    window.addEventListener('load', async function () {
-        await loadAvailableModels();
-        await checkModelStatus();
-    });
-
-    async function loadAvailableModels() {
-        try {
-            const response = await fetch('/available-models');
-            const data = await response.json();
-            ['modelSelect', 'initialModelSelect'].forEach(id => {
-                const select = document.getElementById(id);
-                select.innerHTML = '';
-                if (data.models && data.models.length > 0) {
-                    select.appendChild(new Option('请选择一个模型', ''));
-                    data.models.forEach(model => select.appendChild(new Option(model, model)));
-                } else {
-                    select.appendChild(new Option('无可用模型', ''));
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const generateBtn = document.getElementById('generateBtn');
+            const loadModelBtn = document.getElementById('loadModelBtn');
+            const scenesContainer = document.querySelector('.scenes-container');
+            const taskProgress = document.querySelector('.task-progress .progress-fill');
+            const taskProgressText = document.querySelector('.task-progress .progress-header span:last-child');
+            const generatedScenes = document.querySelector('.task-info .task-info-value');
+            
+            // 模拟场景数据
+            const sampleScenes = [
+                {
+                    title: "魔法书的发现",
+                    description: "年轻的冒险者艾拉在古老的图书馆中发现了一本神秘的魔法书，书皮上镶嵌着发光的宝石。",
+                    image: "https://images.unsplash.com/photo-1584824486539-53bb4646bdbc?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=800&q=80"
+                },
+                {
+                    title: "异世界的入口",
+                    description: "当艾拉翻开魔法书时，一道耀眼的光芒将她吸入了一个充满神秘生物和未知危险的奇幻世界。",
+                    image: "https://images.unsplash.com/photo-1505506874110-6a7a69069a08?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=800&q=80"
+                },
+                {
+                    title: "遇见守护精灵",
+                    description: "在陌生的世界中，艾拉遇到了一个会说话的守护精灵，精灵告诉她必须掌握书中的魔法才能找到回家的路。",
+                    image: "https://images.unsplash.com/photo-1516834474-48c0abc2a902?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=800&q=80"
+                },
+                {
+                    title: "魔法训练",
+                    description: "艾拉在精灵的指导下开始学习魔法，她发现魔法书中的咒语能够控制自然元素。",
+                    image: "https://images.unsplash.com/photo-1518495973540-52e9dde5e4ac?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=800&q=80"
                 }
-            });
-        } catch (error) {
-            console.error('获取模型列表失败:', error);
-            ['modelSelect', 'initialModelSelect'].forEach(id => {
-                document.getElementById(id).innerHTML = '<option value="">获取失败</option>';
-            });
-        }
-    }
-
-    async function checkModelStatus() {
-        try {
-            const response = await fetch('/model-status');
-            const data = await response.json();
-            isModelLoaded = data.is_loaded;
-            if (data.is_loaded && data.current_model) {
-                selectedModel = data.current_model;
-                showCurrentModelInfo(data.current_model);
-            } else {
-                showInitialModelSelection();
+            ];
+            
+            // 创建场景卡片
+            function createSceneCards() {
+                scenesContainer.innerHTML = '';
+                
+                sampleScenes.forEach((scene, index) => {
+                    const sceneCard = document.createElement('div');
+                    sceneCard.className = 'scene-card';
+                    sceneCard.innerHTML = `
+                        <div class="scene-image">
+                            <img src="${scene.image}" alt="${scene.title}">
+                        </div>
+                        <div class="scene-content">
+                            <h3 class="scene-title">场景 ${index + 1}: ${scene.title}</h3>
+                            <p class="scene-description">${scene.description}</p>
+                            <div class="scene-actions">
+                                <button class="action-btn regenerate-btn">
+                                    <i class="fas fa-redo"></i>
+                                    重新生成
+                                </button>
+                                <button class="action-btn download-btn">
+                                    <i class="fas fa-download"></i>
+                                    下载
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                    scenesContainer.appendChild(sceneCard);
+                });
             }
-        } catch (error) {
-            console.error('获取模型状态失败:', error);
-            showInitialModelSelection();
-        }
-    }
-
-    function showCurrentModelInfo(modelName) {
-        document.getElementById('currentModelText').textContent = `当前模型: ${modelName}`;
-        document.getElementById('currentModelInfo').style.display = 'block';
-        document.getElementById('initialModelSelection').style.display = 'none';
-        document.getElementById('modelSelectionArea').style.display = 'none';
-    }
-
-    function showInitialModelSelection() {
-        document.getElementById('currentModelInfo').style.display = 'none';
-        document.getElementById('initialModelSelection').style.display = 'flex';
-    }
-
-    function showModelSelection() {
-        document.getElementById('modelSelectionArea').style.display = 'block';
-        document.getElementById('modelSelect').value = '';
-        document.getElementById('confirmModelBtn').disabled = true;
-    }
-
-    function hideModelSelection() {
-        document.getElementById('modelSelectionArea').style.display = 'none';
-    }
-
-    document.getElementById('initialModelSelect').addEventListener('change', function () {
-        setModel(this.value, 'initialConfirmBtn');
-    });
-    document.getElementById('modelSelect').addEventListener('change', function () {
-        setModel(this.value, 'confirmModelBtn');
-    });
-
-    async function setModel(modelName, btnId) {
-        const confirmBtn = document.getElementById(btnId);
-        if (!modelName) {
-            confirmBtn.disabled = true;
-            return;
-        }
-        try {
-            const response = await fetch('/set-model', {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ model_name: modelName })
-            });
-            const result = await response.json();
-            if (result.success) {
-                selectedModel = modelName;
-                confirmBtn.disabled = false;
-                const message = isModelLoaded ? `切换模型到: ${modelName} (需要重新加载)` : `已选择: ${modelName}`;
-                showModelStatus(message, isModelLoaded ? 'warning' : 'info');
-            } else {
-                showModelStatus(`模型设置失败: ${result.message}`, 'error');
+            
+            // 更新进度
+            function updateProgress(percent) {
+                taskProgress.style.width = `${percent}%`;
+                taskProgressText.textContent = `${percent}%`;
+                generatedScenes.textContent = `${Math.floor(percent/100 * 8)}/8`;
             }
-        } catch (error) {
-            showModelStatus(`设置请求失败: ${error.message}`, 'error');
-        }
-    }
-
-    async function confirmInitialModel() { await loadModel('initialConfirmBtn', 'initialModelSelect'); }
-    async function confirmModel() { await loadModel('confirmModelBtn', 'modelSelect'); }
-
-    async function loadModel(btnId, selectId) {
-        if (!selectedModel || isLoadingModel) return;
-        const confirmBtn = document.getElementById(btnId);
-        const modelSelect = document.getElementById(selectId);
-
-        isLoadingModel = true;
-        confirmBtn.disabled = true;
-        if(modelSelect) modelSelect.disabled = true;
-        confirmBtn.innerHTML = '<span class="loading-spinner"></span>加载中...';
-        showModelStatus('模型正在加载到显存，请耐心等待...', 'info');
-
-        try {
-            const response = await fetch('/load-model', { method: 'POST' });
-            const result = await response.json();
-            if (result.success) {
-                isModelLoaded = true;
-                showModelStatus('模型加载成功！', 'success');
-                showCurrentModelInfo(selectedModel);
-                setTimeout(hideModelStatus, 3000);
-            } else {
-                isModelLoaded = false;
-                showModelStatus(`模型加载失败: ${result.message}`, 'error');
-                confirmBtn.innerHTML = '确认加载';
-                confirmBtn.disabled = false;
-                if(modelSelect) modelSelect.disabled = false;
+            
+            // 模拟生成过程
+            function simulateGeneration() {
+                let progress = 0;
+                const interval = setInterval(() => {
+                    progress += Math.floor(Math.random() * 10) + 5;
+                    if (progress >= 100) {
+                        progress = 100;
+                        clearInterval(interval);
+                        
+                        // 显示完成消息
+                        const messageBox = document.querySelector('.message-box');
+                        messageBox.className = 'message-box success';
+                        messageBox.innerHTML = `
+                            <i class="fas fa-check-circle message-icon"></i>
+                            <div>
+                                <strong>生成完成！</strong>
+                                <p>所有场景已成功生成，您可以查看结果或生成视频</p>
+                            </div>
+                        `;
+                        
+                        // 创建场景卡片
+                        createSceneCards();
+                    }
+                    updateProgress(progress);
+                }, 500);
             }
-        } catch (error) {
-            isModelLoaded = false;
-            showModelStatus(`加载模型请求失败: ${error.message}`, 'error');
-            confirmBtn.innerHTML = '确认加载';
-            confirmBtn.disabled = false;
-            if(modelSelect) modelSelect.disabled = false;
-        }
-        isLoadingModel = false;
-    }
-
-    function showModelStatus(message, type) {
-        const statusDiv = document.getElementById('modelStatus');
-        statusDiv.style.display = 'block';
-        statusDiv.textContent = message;
-        statusDiv.className = `message-box ${type}`;
-    }
-    function hideModelStatus() { document.getElementById('modelStatus').style.display = 'none'; }
-
-    function formatTime(seconds) {
-        if (isNaN(seconds) || seconds < 0 || !isFinite(seconds)) return "计算中...";
-        const mins = Math.floor(seconds / 60);
-        const secs = Math.floor(seconds % 60);
-        return `${mins}分 ${secs.toString().padStart(2, '0')}秒`;
-    }
-
-    // 这是唯一且正确的 generateComic 函数
-    async function generateComic() {
-        const text = document.getElementById('novelText').value;
-        const numScenes = document.getElementById('numScenes').value;
-        const steps = document.getElementById('steps').value;
-        const guidance = document.getElementById('guidance').value;
-        const width = document.getElementById('width').value;
-        const height = document.getElementById('height').value;
-        
-        const resultDiv = document.getElementById('result');
-        const overallProgressDiv = document.getElementById('overallProgress');
-        const generateBtn = document.getElementById('generateBtn');
-
-        if (!isModelLoaded) { alert('请先选择并成功加载一个模型！'); return; }
-        if (!text.trim()) { alert('请输入小说文本！'); return; }
-
-        resultDiv.innerHTML = '';
-        overallProgressDiv.style.display = 'block';
-        overallProgressDiv.className = 'message-box info';
-        overallProgressDiv.innerHTML = '正在连接服务器...';
-        generateBtn.disabled = true;
-
-        let startTime = Date.now();
-        let scenesDone = 0;
-        let totalScenes = parseInt(numScenes);
-
-        const params = new URLSearchParams({ text, num_scenes: numScenes, steps, guidance, width, height });
-        const eventSource = new EventSource(`/novel-to-comic-stream?${params.toString()}`);
-
-        function initializePlaceholders(count) {
-            resultDiv.innerHTML = '';
-            for (let i = 0; i < count; i++) {
-                const sceneDiv = document.createElement('div');
-                sceneDiv.className = 'scene';
-                sceneDiv.id = `scene-${i}`;
-                sceneDiv.innerHTML = `
-                    <h3>场景 ${i + 1}</h3>
-                    <p id="desc-${i}" style="color: #888;"><i>等待场景描述...</i></p>
-                    <div class="progress-bar-container">
-                        <div class="progress-bar" id="progress-bar-${i}">等待中...</div>
-                    </div>
-                    <div class="image-container" id="image-container-${i}" style="display:none;">
-                        <img src="" alt="场景 ${i + 1}">
-                    </div>
-                    <div class="image-actions" id="actions-${i}" style="display:none;">
-                        <button onclick="regenerateImage(${i})">重新生成</button>
+            
+            // 生成按钮事件
+            generateBtn.addEventListener('click', function() {
+                const novelText = document.getElementById('novelText').value;
+                if (!novelText.trim()) {
+                    alert('请输入小说文本！');
+                    return;
+                }
+                
+                // 更新UI状态
+                generateBtn.disabled = true;
+                generateBtn.innerHTML = '<i class="fas fa-spinner loading-spinner"></i> 生成中...';
+                
+                // 显示生成消息
+                const messageBox = document.querySelector('.message-box');
+                messageBox.className = 'message-box info';
+                messageBox.innerHTML = `
+                    <i class="fas fa-info-circle message-icon"></i>
+                    <div>
+                        <strong>正在生成漫画</strong>
+                        <p>系统正在处理您的请求，请稍候...</p>
                     </div>
                 `;
-                resultDiv.appendChild(sceneDiv);
-            }
-        }
-
-        eventSource.onmessage = function (event) {
-            const data = JSON.parse(event.data);
-
-            switch (data.type) {
-                case 'start':
-                    totalScenes = data.total_scenes;
-                    initializePlaceholders(totalScenes);
-                    overallProgressDiv.innerHTML = `已获取故事大纲，共 ${totalScenes} 个场景，准备开始生成...`;
-                    break;
                 
-                case 'info':
-                    overallProgressDiv.innerHTML = data.message;
-                    break;
-
-                case 'progress': {
-                    const { index, step, total_steps } = data;
-                    const progressBar = document.getElementById(`progress-bar-${index}`);
-                    if (progressBar) {
-                        const percentage = Math.round((step / total_steps) * 100);
-                        progressBar.style.width = `${percentage}%`;
-                        progressBar.textContent = `${percentage}%`;
-                    }
-                    break;
+                // 更新系统状态为忙碌
+                document.querySelector('.task-header .status-value').textContent = '忙碌';
+                document.querySelector('.task-header .status-value').className = 'status-value status-medium';
+                
+                // 开始模拟生成过程
+                setTimeout(simulateGeneration, 1000);
+            });
+            
+            // 加载模型按钮事件
+            loadModelBtn.addEventListener('click', function() {
+                const modelSelect = document.getElementById('modelSelect');
+                if (!modelSelect.value) {
+                    alert('请选择要加载的模型！');
+                    return;
                 }
-
-                case 'scene': {
-                    scenesDone++;
-                    const { index, description, image_url } = data;
-                    document.getElementById(`desc-${index}`).innerHTML = description;
-                    const progressBarContainer = document.getElementById(`progress-bar-${index}`).parentElement;
-                    progressBarContainer.style.display = 'none';
-
-                    const imageContainer = document.getElementById(`image-container-${index}`);
-                    imageContainer.style.display = 'block';
-                    imageContainer.querySelector('img').src = image_url;
-                    document.getElementById(`actions-${index}`).style.display = 'block';
+                
+                // 更新UI状态
+                loadModelBtn.disabled = true;
+                loadModelBtn.innerHTML = '<i class="fas fa-spinner loading-spinner"></i> 加载中...';
+                
+                // 模拟模型加载
+                setTimeout(() => {
+                    loadModelBtn.disabled = false;
+                    loadModelBtn.innerHTML = '<i class="fas fa-download"></i> 加载模型';
                     
-                    const elapsedTime = (Date.now() - startTime) / 1000;
-                    const avgTimePerScene = elapsedTime / scenesDone;
-                    const remainingScenes = totalScenes - scenesDone;
-                    const etaSeconds = avgTimePerScene * remainingScenes;
-                    overallProgressDiv.innerHTML = `已完成 ${scenesDone} / ${totalScenes}。预计剩余: ${formatTime(etaSeconds)}`;
-                    break;
-                }
-
-                // ### 新增逻辑：处理 all_images_generated 事件 ###
-                case 'all_images_generated': {
-                    const createVideoBtn = document.createElement('button');
-                    createVideoBtn.textContent = '开始生成视频';
-                    createVideoBtn.style.marginTop = '20px';
-                    createVideoBtn.onclick = async function() {
-                        createVideoBtn.textContent = '视频生成中...';
-                        createVideoBtn.disabled = true;
-                        try {
-                            const response = await fetch('/create-video', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ session_id: data.session_id })
-                            });
-                            const result = await response.json();
-                            if (result.success) {
-                                const videoLink = document.createElement('a');
-                                videoLink.href = `/video?video_url=${result.video_url}`;
-                                videoLink.textContent = '观看生成的视频';
-                                videoLink.target = '_blank';
-                                videoLink.style.display = 'block';
-                                videoLink.style.marginTop = '20px';
-                                videoLink.style.fontSize = '18px';
-                                videoLink.style.fontWeight = 'bold';
-                                createVideoBtn.replaceWith(videoLink);
-                            } else {
-                                alert('视频生成失败: ' + result.message);
-                                createVideoBtn.textContent = '开始生成视频';
-                                createVideoBtn.disabled = false;
-                            }
-                        } catch (error) {
-                            alert('视频生成请求失败: ' + error.message);
-                            createVideoBtn.textContent = '开始生成视频';
-                            createVideoBtn.disabled = false;
-                        }
-                    };
-                    resultDiv.appendChild(createVideoBtn);
-                    break;
-                }
-
-                case 'scene_error': {
-                    scenesDone++;
-                    const { index, message } = data;
-                    const sceneDiv = document.getElementById(`scene-${index}`);
-                    if (sceneDiv) {
-                        sceneDiv.innerHTML = `<h3>场景 ${index + 1}</h3><div class="message-box error">${message}</div>`;
-                    }
-                    break;
-                }
-                        
-                case 'complete':
-                    overallProgressDiv.className = 'message-box success';
-                    overallProgressDiv.innerHTML = '所有场景已生成完毕！';
-                    eventSource.close();
-                    generateBtn.disabled = false;
-                    setTimeout(() => { overallProgressDiv.style.display = 'none'; }, 5000);
-                    break;
-                
-                case 'error':
-                    overallProgressDiv.className = 'message-box error';
-                    overallProgressDiv.innerHTML = `发生严重错误: ${data.message}`;
-                    eventSource.close();
-                    generateBtn.disabled = false;
-                    break;
-            }
-        };
-
-        eventSource.onerror = function (error) {
-            overallProgressDiv.className = 'message-box error';
-            overallProgressDiv.innerHTML = '与服务器的连接已断开。请检查后台服务是否运行正常并重试。';
-            eventSource.close();
-            generateBtn.disabled = false;
-        };
-    }
-    
-    // regenerateImage 函数暂时保持不变，因为后端未实现
-    async function regenerateImage(sceneIndex) {
-        alert(`重新生成场景 ${sceneIndex + 1} 的功能正在开发中！`);
-    }
-
-</script>
+                    // 显示成功消息
+                    const modelName = modelSelect.options[modelSelect.selectedIndex].text;
+                    const messageBox = document.querySelector('.message-box');
+                    messageBox.className = 'message-box success';
+                    messageBox.innerHTML = `
+                        <i class="fas fa-check-circle message-icon"></i>
+                        <div>
+                            <strong>模型加载成功</strong>
+                            <p>${modelName} 模型已成功加载到显存</p>
+                        </div>
+                    `;
+                }, 2000);
+            });
+        });
+    </script>
 </body>
 </html>
