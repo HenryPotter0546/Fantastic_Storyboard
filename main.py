@@ -285,11 +285,19 @@ async def generate_scenes(
         # 分割场景（得到中文描述）
         logger.info("向前端发送“开始分割场景”...")
         yield f"data: {json.dumps({'type': 'info', 'message': '正在分割场景，这可能需要一些时间...'})}\n\n"
-
         logger.info("开始分割场景")
-        scenes_cn = deepseek.split_into_scenes_cn(text, num_scenes)
-        logger.info(f"场景分割完成，共 {len(scenes_cn)} 个场景")
 
+        loop = asyncio.get_event_loop()
+        # loop.run_in_executor 会将同步函数 deepseek.split_into_scenes_cn 
+        # 放到一个独立的线程池中执行，这样它就不会阻塞主事件循环了。
+        scenes_cn = await loop.run_in_executor(
+            None,  # 使用默认的线程池执行器
+            deepseek.split_into_scenes_cn,
+            text,
+            num_scenes
+        )
+        
+        logger.info(f"场景分割完成，共 {len(scenes_cn)} 个场景")
         # 发送场景总数，以便前端初始化
         yield f"data: {json.dumps({'type': 'start', 'total_scenes': len(scenes_cn)})}\n\n"
         
