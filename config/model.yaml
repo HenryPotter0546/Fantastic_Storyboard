@@ -19,7 +19,7 @@ Unstable:
 
 
 Tinystable:
-  path: "D:/Study Files/model/tiny-stable-diffusion-torch"
+  path: "C:/Users/better/.cache/modelscope/hub/models/hf-diffusers/tiny-stable-diffusion-torch"
   single_files: false
   use_safetensors: false
   type: "sd"

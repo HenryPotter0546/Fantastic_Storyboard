@@ -9,12 +9,22 @@
             margin: 40px;
             background-color: #f4f4f9;
             color: #333;
+
+            /******************更改背景******************/
+            /* 复杂像素风格 */
+            background-color: #d3d3d3; /* 设置备用背景色 */
+            background-image: url("/static/pattern0.png");
+            /* background-size: 20px 20px; */
+            background-position: center;
+            background-repeat: repeat; /* 让背景图片平铺 */
+            background-size: auto; /* 保持图片原始大小 */
+
         }
 
         .container {
             max-width: 800px;
             margin: 0 auto;
-            background-color: #fff;
+            background-color:rgba(255, 255, 255, 0.9); /* 修改为带透明度的白色 */
             padding: 20px 40px;
             border-radius: 12px;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
