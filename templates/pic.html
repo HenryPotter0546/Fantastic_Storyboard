@@ -305,6 +305,7 @@
 </div>
 
 <script>
+    const token = localStorage.getItem('accessToken');
     let scenes = [];
     let currentModel = null;
     let isGenerating = false;
@@ -444,13 +445,12 @@
     async function generateComic(params) {
         const resultDiv = document.getElementById('result');
         const overallProgressDiv = document.getElementById('overallProgress');
-        const generateBtn = document.getElementById('generateBtn');
 
         resultDiv.innerHTML = '';
         overallProgressDiv.style.display = 'block';
         overallProgressDiv.className = 'message-box info';
         overallProgressDiv.innerHTML = '正在连接服务器...';
-        generateBtn.disabled = true;
+
 
         const progressState = {
             startTime: Date.now(),
@@ -501,7 +501,7 @@
     
             const resultDiv = document.getElementById('result');
             const overallProgressDiv = document.getElementById('overallProgress');
-            const generateBtn = document.getElementById('generateBtn');
+            // const generateBtn = document.getElementById('generateBtn');
 
             switch (data.type) {
                 case 'start':
@@ -617,7 +617,7 @@
                         ? '所有场景已生成完毕！' 
                         : '所有场景已生成完毕！';
                     overallProgressDiv.innerHTML = message;
-                    generateBtn.disabled = false;
+                    // generateBtn.disabled = false;
                     setTimeout(() => { overallProgressDiv.style.display = 'none'; }, 5000);
                     
                     // 刷新用户积分
@@ -627,7 +627,7 @@
                 case 'error':
                     overallProgressDiv.className = 'message-box error';
                     overallProgressDiv.innerHTML = `发生错误: ${data.message}`;
-                    generateBtn.disabled = false;
+                    // generateBtn.disabled = false;
                     
                     // 即使失败也刷新积分（因为可能已扣除）
                     getUserInfo();
@@ -636,8 +636,17 @@
         }
 
         try {
-            alert('发送模型参数',params);
-            const urlParams = new URLSearchParams(params);
+            alert('发送模型参数'+Object.values(params));
+
+            // alert({Object.values(params)});
+            const text = params.text
+            const num_scenes = params.num_scenes
+            const steps = params.steps
+            const guidance = params.guidance
+            const width = params.width
+            const height = params.height
+
+            const urlParams = new URLSearchParams({ text, num_scenes, steps, guidance, width, height });
             const response = await fetch(`/novel-to-comic-stream?${urlParams.toString()}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -684,10 +693,10 @@
             }
         } catch (error) {
             const overallProgressDiv = document.getElementById('overallProgress');
-            const generateBtn = document.getElementById('generateBtn');
+            // const generateBtn = document.getElementById('generateBtn');
             overallProgressDiv.className = 'message-box error';
             overallProgressDiv.innerHTML = `请求失败: ${error.message}`;
-            generateBtn.disabled = false;
+            // generateBtn.disabled = false;
         }
     }
 
