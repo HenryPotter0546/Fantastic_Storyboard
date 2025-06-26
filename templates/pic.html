@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>漫画生成页面</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 40px;
+            background-color: #f4f4f9;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background-color: #fff;
+            padding: 20px 40px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #eee;
+        }
+
+        .scene {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background-color: #fff;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+            transition: all 0.3s ease;
+        }
+
+        .scene h3 {
+            color: #333;
+            margin-bottom: 15px;
+        }
+
+        .scene-content {
+            display: flex;
+            gap: 20px;
+        }
+
+        .description-area {
+            flex: 1;
+        }
+
+        .description-display {
+            color: #666;
+            line-height: 1.6;
+            margin-bottom: 15px;
+            font-size: 16px;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+            border: 1px solid #e9ecef;
+        }
+
+        .description-edit {
+            width: 100%;
+            min-height: 80px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            resize: vertical;
+            display: none;
+        }
+
+        .image-area {
+            flex: 1;
+        }
+
+        .scene img {
+            max-width: 100%;
+            border-radius: 4px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .scene-actions {
+            margin-top: 15px;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            padding: 8px 16px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            cursor: pointer;
+            border-radius: 4px;
+            font-size: 14px;
+            transition: background-color 0.2s;
+        }
+
+        button:hover:not(:disabled) {
+            background-color: #0056b3;
+        }
+
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+
+        .btn-warning {
+            background-color: #ffc107;
+            color: #212529;
+        }
+
+        .btn-warning:hover:not(:disabled) {
+            background-color: #e0a800;
+        }
+
+        .btn-success {
+            background-color: #28a745;
+        }
+
+        .btn-success:hover:not(:disabled) {
+            background-color: #218838;
+        }
+
+        .btn-secondary {
+            background-color: #6c757d;
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+            background-color: #5a6268;
+        }
+
+        .message-box {
+            padding: 15px;
+            border: 1px solid;
+            margin: 10px 0;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .error {
+            color: #721c24;
+            background-color: #f8d7da;
+            border-color: #f5c6cb;
+        }
+
+        .info {
+            color: #0c5460;
+            background-color: #d1ecf1;
+            border-color: #bee5eb;
+        }
+
+        .success {
+            color: #155724;
+            background-color: #d4edda;
+            border-color: #c3e6cb;
+        }
+
+        .warning {
+            color: #856404;
+            background-color: #fff3cd;
+            border-color: #ffeeba;
+        }
+
+        .progress-bar-container {
+            width: 100%;
+            background-color: #e9ecef;
+            border-radius: 4px;
+            margin: 15px 0;
+            height: 20px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .progress-bar {
+            width: 0%;
+            height: 100%;
+            background-color: #007bff;
+            color: white;
+            transition: width 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .global-actions {
+            position: sticky;
+            top: 20px;
+            background-color: #fff;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        #overallProgress {
+            display: none;
+        }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .model-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .back-btn {
+            background-color: #6c757d;
+        }
+
+        .back-btn:hover:not(:disabled) {
+            background-color: #5a6268;
+        }
+
+        .regeneration-settings {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+            border: 1px solid #e9ecef;
+        }
+
+        .regeneration-settings label {
+            font-size: 14px;
+            color: #333;
+            white-space: nowrap;
+        }
+
+        .regeneration-settings input {
+            width: 80px;
+            padding: 4px 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1>漫画生成页面</h1>
+        <button class="back-btn" onclick="goBack()">返回首页</button>
+    </div>
+
+    <div class="global-actions">
+        <div class="model-controls">
+            <span>当前模型:</span>
+            <span id="currentModel">检查中...</span>
+            <button id="reloadModelBtn" class="btn-warning" onclick="showReloadModel()">重新加载模型</button>
+        </div>
+        <div id="modelReloadArea" style="display: none;">
+            <select id="modelSelect"></select>
+            <button id="confirmReloadBtn" class="btn-success" onclick="confirmReloadModel()" disabled>确认重新加载
+            </button>
+            <button class="btn-secondary" onclick="hideReloadModel()">取消</button>
+        </div>
+
+        <!-- 新增：重新生成参数设置 -->
+        <div class="regeneration-settings">
+            <label for="regenerationSteps">重新生成迭代次数:</label>
+            <input type="number" id="regenerationSteps" value="30" min="10" max="100"
+                   title="设置重新生成图片时的迭代次数">
+        </div>
+    </div>
+
+    <div id="overallProgress" class="message-box info"></div>
+    <div id="result"></div>
+</div>
+
+<script>
+    let scenes = [];
+    let currentModel = null;
+    let isGenerating = false;
+
+    window.addEventListener('load', async function () {
+        await checkModelStatus();
+        await loadAvailableModels();
+        startGeneration();
+    });
+
+    async function checkModelStatus() {
+        try {
+            const response = await fetch('/model-status');
+            const data = await response.json();
+            if (data.is_loaded && data.current_model) {
+                currentModel = data.current_model;
+                document.getElementById('currentModel').textContent = data.current_model;
+            } else {
+                document.getElementById('currentModel').textContent = '未加载模型';
+                alert('请先返回首页加载模型！');
+            }
+        } catch (error) {
+            console.error('获取模型状态失败:', error);
+            document.getElementById('currentModel').textContent = '获取失败';
+        }
+    }
+
+    async function loadAvailableModels() {
+        try {
+            const response = await fetch('/available-models');
+            const data = await response.json();
+            const select = document.getElementById('modelSelect');
+            select.innerHTML = '';
+            if (data.models && data.models.length > 0) {
+                select.appendChild(new Option('请选择一个模型', ''));
+                data.models.forEach(model => select.appendChild(new Option(model, model)));
+            } else {
+                select.appendChild(new Option('无可用模型', ''));
+            }
+        } catch (error) {
+            console.error('获取模型列表失败:', error);
+            document.getElementById('modelSelect').innerHTML = '<option value="">获取失败</option>';
+        }
+    }
+
+    function startGeneration() {
+        const params = JSON.parse(sessionStorage.getItem('comicParams'));
+        if (!params) {
+            alert('参数丢失，请返回首页重新开始！');
+            goBack();
+            return;
+        }
+
+        generateComic(params);
+    }
+
+    function goBack() {
+        window.location.href = '/';
+    }
+
+    function showReloadModel() {
+        if (isGenerating) {
+            alert('正在生成图片，请等待完成后再重新加载模型！');
+            return;
+        }
+        document.getElementById('modelReloadArea').style.display = 'flex';
+        document.getElementById('modelSelect').value = '';
+        document.getElementById('confirmReloadBtn').disabled = true;
+    }
+
+    function hideReloadModel() {
+        document.getElementById('modelReloadArea').style.display = 'none';
+    }
+
+    document.getElementById('modelSelect').addEventListener('change', function () {
+        const confirmBtn = document.getElementById('confirmReloadBtn');
+        if (this.value) {
+            confirmBtn.disabled = false;
+        } else {
+            confirmBtn.disabled = true;
+        }
+    });
+
+    async function confirmReloadModel() {
+        const modelName = document.getElementById('modelSelect').value;
+        if (!modelName) return;
+
+        const confirmBtn = document.getElementById('confirmReloadBtn');
+        const modelSelect = document.getElementById('modelSelect');
+
+        confirmBtn.disabled = true;
+        modelSelect.disabled = true;
+        confirmBtn.innerHTML = '<span class="loading-spinner"></span>加载中...';
+
+        try {
+            // 设置模型
+            const setResponse = await fetch('/set-model', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({model_name: modelName})
+            });
+            const setResult = await setResponse.json();
+
+            if (!setResult.success) {
+                throw new Error(setResult.message);
+            }
+
+            // 加载模型
+            const loadResponse = await fetch('/load-model', {method: 'POST'});
+            const loadResult = await loadResponse.json();
+
+            if (loadResult.success) {
+                currentModel = modelName;
+                document.getElementById('currentModel').textContent = modelName;
+                hideReloadModel();
+                alert('模型重新加载成功！');
+            } else {
+                throw new Error(loadResult.message);
+            }
+
+        } catch (error) {
+            alert(`模型加载失败: ${error.message}`);
+        } finally {
+            confirmBtn.innerHTML = '确认重新加载';
+            confirmBtn.disabled = false;
+            modelSelect.disabled = false;
+        }
+    }
+
+    function formatTime(seconds) {
+        if (isNaN(seconds) || seconds < 0 || !isFinite(seconds)) return "计算中...";
+        const mins = Math.floor(seconds / 60);
+        const secs = Math.floor(seconds % 60);
+        return `${mins}分 ${secs.toString().padStart(2, '0')}秒`;
+    }
+
+    async function generateComic(params) {
+        const resultDiv = document.getElementById('result');
+        const overallProgressDiv = document.getElementById('overallProgress');
+
+        resultDiv.innerHTML = '';
+        overallProgressDiv.style.display = 'block';
+        overallProgressDiv.className = 'message-box info';
+        overallProgressDiv.innerHTML = '正在连接服务器...';
+        isGenerating = true;
+
+        let startTime = Date.now();
+        let scenesDone = 0;
+        let totalScenes = parseInt(params.num_scenes);
+
+        const urlParams = new URLSearchParams(params);
+        const eventSource = new EventSource(`/novel-to-comic-stream?${urlParams.toString()}`);
+
+        function initializePlaceholders(count, sceneTexts) {
+            resultDiv.innerHTML = '';
+            scenes = sceneTexts || [];
+            for (let i = 0; i < count; i++) {
+                const sceneDiv = document.createElement('div');
+                sceneDiv.className = 'scene';
+                sceneDiv.id = `scene-${i}`;
+                sceneDiv.innerHTML = `
+                    <h3>场景 ${i + 1}</h3>
+                    <div class="scene-content">
+                        <div class="description-area">
+                            <div class="description-display" id="desc-${i}">
+                                ${sceneTexts && sceneTexts[i] ? sceneTexts[i] : '<i style="color: #888;">等待场景描述...</i>'}
+                            </div>
+                            <textarea class="description-edit" id="edit-${i}">${sceneTexts && sceneTexts[i] ? sceneTexts[i] : ''}</textarea>
+                            <div class="scene-actions">
+                                <button onclick="editDescription(${i})" id="edit-btn-${i}">编辑描述</button>
+                                <button onclick="saveDescription(${i})" id="save-btn-${i}" class="btn-success" style="display: none;">保存</button>
+                                <button onclick="cancelEdit(${i})" id="cancel-btn-${i}" class="btn-secondary" style="display: none;">取消</button>
+                                <button onclick="regenerateImage(${i})" id="regen-btn-${i}" style="display: none;">重新生成图片</button>
+                            </div>
+                        </div>
+                        <div class="image-area">
+                            <div class="progress-bar-container" id="progress-container-${i}">
+                                <div class="progress-bar" id="progress-bar-${i}">等待中...</div>
+                            </div>
+                            <div class="image-container" id="image-container-${i}" style="display:none;">
+                                <img src="" alt="场景 ${i + 1}">
+                            </div>
+                        </div>
+                    </div>
+                `;
+                resultDiv.appendChild(sceneDiv);
+            }
+        }
+
+        eventSource.onmessage = function (event) {
+            const data = JSON.parse(event.data);
+
+            switch (data.type) {
+                case 'start':
+                    totalScenes = data.total_scenes;
+                    initializePlaceholders(totalScenes, data.scenes);
+                    overallProgressDiv.innerHTML = `已获取故事大纲，共 ${totalScenes} 个场景，准备开始生成...`;
+                    break;
+
+                case 'info':
+                    overallProgressDiv.innerHTML = data.message;
+                    break;
+
+                case 'progress': {
+                    const {index, step, total_steps} = data;
+                    const progressBar = document.getElementById(`progress-bar-${index}`);
+                    if (progressBar) {
+                        const percentage = Math.round((step / total_steps) * 100);
+                        progressBar.style.width = `${percentage}%`;
+                        progressBar.textContent = `${percentage}%`;
+                    }
+                    break;
+                }
+
+                case 'scene': {
+                    scenesDone++;
+                    const {index, description, image_url} = data;
+
+                    // 更新场景描述
+                    document.getElementById(`desc-${index}`).innerHTML = description;
+                    document.getElementById(`edit-${index}`).value = description;
+                    scenes[index] = description;
+
+                    // 隐藏进度条，显示图片
+                    const progressContainer = document.getElementById(`progress-container-${index}`);
+                    progressContainer.style.display = 'none';
+
+                    const imageContainer = document.getElementById(`image-container-${index}`);
+                    imageContainer.style.display = 'block';
+                    imageContainer.querySelector('img').src = image_url;
+
+                    // 显示重新生成按钮
+                    document.getElementById(`regen-btn-${index}`).style.display = 'inline-block';
+
+                    const elapsedTime = (Date.now() - startTime) / 1000;
+                    const avgTimePerScene = elapsedTime / scenesDone;
+                    const remainingScenes = totalScenes - scenesDone;
+                    const etaSeconds = avgTimePerScene * remainingScenes;
+                    overallProgressDiv.innerHTML = `已完成 ${scenesDone} / ${totalScenes}。预计剩余: ${formatTime(etaSeconds)}`;
+                    break;
+                }
+
+                case 'all_images_generated': {
+                    const createVideoBtn = document.createElement('button');
+                    createVideoBtn.textContent = '开始生成视频';
+                    createVideoBtn.className = 'btn-success';
+                    createVideoBtn.style.marginTop = '20px';
+                    createVideoBtn.onclick = async function () {
+                        createVideoBtn.textContent = '视频生成中...';
+                        createVideoBtn.disabled = true;
+                        try {
+                            const response = await fetch('/create-video', {
+                                method: 'POST',
+                                headers: {'Content-Type': 'application/json'},
+                                body: JSON.stringify({session_id: data.session_id})
+                            });
+                            const result = await response.json();
+                            if (result.success) {
+                                const videoLink = document.createElement('a');
+                                videoLink.href = `/video?video_url=${result.video_url}`;
+                                videoLink.textContent = '观看生成的视频';
+                                videoLink.target = '_blank';
+                                videoLink.style.display = 'block';
+                                videoLink.style.marginTop = '20px';
+                                videoLink.style.fontSize = '18px';
+                                videoLink.style.fontWeight = 'bold';
+                                createVideoBtn.replaceWith(videoLink);
+                            } else {
+                                alert('视频生成失败: ' + result.message);
+                                createVideoBtn.textContent = '开始生成视频';
+                                createVideoBtn.disabled = false;
+                            }
+                        } catch (error) {
+                            alert('视频生成请求失败: ' + error.message);
+                            createVideoBtn.textContent = '开始生成视频';
+                            createVideoBtn.disabled = false;
+                        }
+                    };
+                    resultDiv.appendChild(createVideoBtn);
+                    break;
+                }
+
+                case 'scene_error': {
+                    scenesDone++;
+                    const {index, message} = data;
+                    const sceneDiv = document.getElementById(`scene-${index}`);
+                    if (sceneDiv) {
+                        sceneDiv.innerHTML = `<h3>场景 ${index + 1}</h3><div class="message-box error">${message}</div>`;
+                    }
+                    break;
+                }
+
+                case 'complete':
+                    overallProgressDiv.className = 'message-box success';
+                    overallProgressDiv.innerHTML = '所有场景已生成完毕！';
+                    eventSource.close();
+                    isGenerating = false;
+                    setTimeout(() => {
+                        overallProgressDiv.style.display = 'none';
+                    }, 5000);
+                    break;
+
+                case 'error':
+                    overallProgressDiv.className = 'message-box error';
+                    overallProgressDiv.innerHTML = `发生严重错误: ${data.message}`;
+                    eventSource.close();
+                    isGenerating = false;
+                    break;
+            }
+        };
+
+        eventSource.onerror = function (error) {
+            overallProgressDiv.className = 'message-box error';
+            overallProgressDiv.innerHTML = '与服务器的连接已断开。请检查后台服务是否运行正常并重试。';
+            eventSource.close();
+            isGenerating = false;
+        };
+    }
+
+    function editDescription(index) {
+        const displayDiv = document.getElementById(`desc-${index}`);
+        const editTextarea = document.getElementById(`edit-${index}`);
+        const editBtn = document.getElementById(`edit-btn-${index}`);
+        const saveBtn = document.getElementById(`save-btn-${index}`);
+        const cancelBtn = document.getElementById(`cancel-btn-${index}`);
+
+        displayDiv.style.display = 'none';
+        editTextarea.style.display = 'block';
+        editBtn.style.display = 'none';
+        saveBtn.style.display = 'inline-block';
+        cancelBtn.style.display = 'inline-block';
+    }
+
+    function saveDescription(index) {
+        const displayDiv = document.getElementById(`desc-${index}`);
+        const editTextarea = document.getElementById(`edit-${index}`);
+        const editBtn = document.getElementById(`edit-btn-${index}`);
+        const saveBtn = document.getElementById(`save-btn-${index}`);
+        const cancelBtn = document.getElementById(`cancel-btn-${index}`);
+
+        const newDescription = editTextarea.value.trim();
+        if (!newDescription) {
+            alert('描述不能为空！');
+            return;
+        }
+
+        displayDiv.innerHTML = newDescription;
+        scenes[index] = newDescription;
+
+        displayDiv.style.display = 'block';
+        editTextarea.style.display = 'none';
+        editBtn.style.display = 'inline-block';
+        saveBtn.style.display = 'none';
+        cancelBtn.style.display = 'none';
+    }
+
+    function cancelEdit(index) {
+        const displayDiv = document.getElementById(`desc-${index}`);
+        const editTextarea = document.getElementById(`edit-${index}`);
+        const editBtn = document.getElementById(`edit-btn-${index}`);
+        const saveBtn = document.getElementById(`save-btn-${index}`);
+        const cancelBtn = document.getElementById(`cancel-btn-${index}`);
+
+        // 恢复原来的值
+        editTextarea.value = scenes[index] || '';
+
+        displayDiv.style.display = 'block';
+        editTextarea.style.display = 'none';
+        editBtn.style.display = 'inline-block';
+        saveBtn.style.display = 'none';
+        cancelBtn.style.display = 'none';
+    }
+
+    // 修改后的重新生成图片函数
+    async function regenerateImage(sceneIndex) {
+        const description = scenes[sceneIndex];
+        if (!description) {
+            alert('请先确保场景描述不为空！');
+            return;
+        }
+
+        // 获取用户设置的重新生成迭代次数
+        const regenerationSteps = parseInt(document.getElementById('regenerationSteps').value) || 30;
+
+        const regenBtn = document.getElementById(`regen-btn-${sceneIndex}`);
+        const imageContainer = document.getElementById(`image-container-${sceneIndex}`);
+        const progressContainer = document.getElementById(`progress-container-${sceneIndex}`);
+
+        regenBtn.disabled = true;
+        regenBtn.innerHTML = '<span class="loading-spinner"></span>重新生成中...';
+
+        // 显示进度条，隐藏图片
+        imageContainer.style.display = 'none';
+        progressContainer.style.display = 'block';
+        const progressBar = document.getElementById(`progress-bar-${sceneIndex}`);
+        progressBar.style.width = '0%';
+        progressBar.textContent = '准备中...';
+
+        try {
+            const response = await fetch('/regenerate-image', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    description: description,
+                    sceneIndex: sceneIndex,
+                    steps: regenerationSteps  // 传递用户设置的迭代次数
+                })
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                // 隐藏进度条，显示新图片
+                progressContainer.style.display = 'none';
+                imageContainer.style.display = 'block';
+                imageContainer.querySelector('img').src = result.image_url;
+
+                // 移除弹窗提示，直接展示生成结果
+                // 不再显示 alert('重新生成成功！');
+            } else {
+                alert(`重新生成失败: ${result.message}`);
+                // 恢复显示原图片
+                progressContainer.style.display = 'none';
+                imageContainer.style.display = 'block';
+            }
+
+        } catch (error) {
+            alert(`重新生成请求失败: ${error.message}`);
+            // 恢复显示原图片
+            progressContainer.style.display = 'none';
+            imageContainer.style.display = 'block';
+        } finally {
+            regenBtn.disabled = false;
+            regenBtn.innerHTML = '重新生成图片';
+        }
+    }
+</script>
+</body>
+</html>
