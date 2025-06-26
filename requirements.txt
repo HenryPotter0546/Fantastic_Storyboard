@@ -16,3 +16,5 @@ ffmpeg-python==0.2.
 python-jose==3.5.0
 SQLAlchemy==2.0.41
 passlib==1.7.4
+aiomysql==0.2.0
+python-multipart==0.0.20
