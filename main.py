@@ -1,10 +1,10 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 from service.deepseek_service import DeepSeekService
 from service.diffusion_service import LocalDiffusionService
 import asyncio
-from typing import List
-from fastapi.responses import HTMLResponse, StreamingResponse, FileResponse
+from typing import List, Dict, Optional, Callable
+from fastapi.responses import HTMLResponse, StreamingResponse, FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 import traceback
 import logging
@@ -14,7 +14,13 @@ import os
 import uuid
 import base64
 import shutil
-
+import time
+import threading
+import psutil
+from redis import Redis
+from rq import Queue, Worker
+from rq.job import Job
+import datetime
 # 配置日志
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -26,21 +32,21 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 # 创建全局的diffusion服务实例
 diffusion_service = LocalDiffusionService()
 
+# 初始化Redis和任务队列
+redis_conn = Redis(host='localhost', port=6379, db=0)
+task_queue = Queue(connection=redis_conn)
 
 class NovelRequest(BaseModel):
     text: str
     num_scenes: int = 10
 
-
 class SceneResponse(BaseModel):
     description: str
     image_url: str
 
-
 @app.get("/", response_class=HTMLResponse)
 async def root():
     return FileResponse("templates/index.html")
-
 
 @app.get("/available-models")
 async def get_available_models():
@@ -51,7 +57,6 @@ async def get_available_models():
     except Exception as e:
         logger.error(f"获取可用模型失败: {str(e)}")
         return {"models": [], "error": str(e)}
-
 
 @app.post("/set-model")
 async def set_model(request: dict):
@@ -67,7 +72,6 @@ async def set_model(request: dict):
     except Exception as e:
         logger.error(f"设置模型失败: {str(e)}")
         return {"success": False, "message": str(e)}
-
 
 @app.post("/load-model")
 async def load_model():
@@ -102,7 +106,6 @@ async def load_model():
         logger.error(f"预加载模型失败: {str(e)}")
         return {"success": False, "message": str(e)}
 
-
 @app.get("/model-status")
 async def get_model_status():
     """获取模型加载状态"""
@@ -119,261 +122,252 @@ async def get_model_status():
         logger.error(f"获取模型状态失败: {str(e)}")
         return {"is_loaded": False, "current_model": None, "message": str(e)}
 
-
-@app.get("/novel-to-comic-stream")
-async def novel_to_comic_stream(
-    text: str,
-    num_scenes: int = 10,
-    steps: int = 30,
-    guidance: float = 7.5,
-    width: int = 512,
-    height: int = 512,
-):
-    return StreamingResponse(
-        generate_scenes(text, num_scenes, steps, guidance, width, height), 
-        media_type="text/event-stream"
-    )
-
-
-async def generate_scenes(
-    text: str,
-    num_scenes: int,
-    steps: int,
-    guidance: float,
-    width: int,
-    height: int,
-):
-    session_id = str(uuid.uuid4())
+# 任务队列相关端点
+@app.post("/submit-task")
+async def submit_task(request: NovelRequest):
+    """提交新任务到队列"""
     try:
-        logger.info(f"开始处理请求, 参数: num_scenes={num_scenes}, steps={steps}, guidance={guidance}")
-        logger.info(f"开始处理请求，会话ID: {session_id}")
-        
-        # 创建一个临时目录来存放生成的图片
-        temp_dir = os.path.join("temp", session_id)
-        if not os.path.exists(temp_dir):
-            os.makedirs(temp_dir)
-        
-        image_paths = []
-        # 初始化服务
-        logger.info("初始化服务...")
-        deepseek = DeepSeekService()
-        
-        # 检查是否已设置模型
-        if diffusion_service.model_name is None:
-            error_msg = "请先选择并加载模型"
-            logger.error(error_msg)
-            yield f"data: {json.dumps({'type': 'error', 'message': error_msg})}\n\n"
-            return
-
-        # 检查模型是否已加载，如果没有则自动加载
+        # 检查模型是否已加载
         if not diffusion_service.is_model_loaded():
-            logger.info("模型未加载，开始自动加载...")
-            yield f"data: {json.dumps({'type': 'info', 'message': f'模型 {diffusion_service.model_name} 未加载，正在自动加载中...'})}\n\n"
-            try:
-                diffusion_service.preload_model()
-                yield f"data: {json.dumps({'type': 'info', 'message': '模型加载完成，开始生成...'})}\n\n"
-            except Exception as e:
-                error_msg = f"模型加载失败: {str(e)}"
-                logger.error(error_msg)
-                yield f"data: {json.dumps({'type': 'error', 'message': error_msg})}\n\n"
-                return
-
-        # 分割场景（得到中文描述）
-        logger.info("向前端发送“开始分割场景”...")
-        yield f"data: {json.dumps({'type': 'info', 'message': '正在分割场景，这可能需要一些时间...'})}\n\n"
-
-        logger.info("开始分割场景")
-        scenes_cn = deepseek.split_into_scenes_cn(text, num_scenes)
-        logger.info(f"场景分割完成，共 {len(scenes_cn)} 个场景")
-
-        # 发送场景总数，以便前端初始化
-        yield f"data: {json.dumps({'type': 'start', 'total_scenes': len(scenes_cn)})}\n\n"
-        
-        # 为每个场景生成图片
-        logger.info("开始生成图片...")
-        for i, scene_cn in enumerate(scenes_cn):
-            logger.info(f"处理第 {i+1}/{len(scenes_cn)} 个场景")
-            try:
-                # 定义一个回调函数，用于在生成过程中发送进度
-                def progress_callback(step, timestep, latents):
-                    # 使用 nonlocal 来修改外部作用域的变量，确保我们能拿到正确的索引 i
-                    nonlocal i
-                    # 构造并发送进度数据
-                    progress_data = {
-                        "type": "progress",
-                        "index": i,
-                        "step": step + 1,
-                        "total_steps": steps,
-                    }
-                    loop = asyncio.get_event_loop()
-                    progress_data = {
-                        "type": "progress",
-                        "index": i,
-                        "step": step + 1,
-                        "total_steps": steps,
-                    }
-                queue = asyncio.Queue()
-
-                def progress_callback(step, timestep, latents):
-                    try:
-                        queue.put_nowait({
-                            "type": "progress", "index": i, "step": step + 1, "total_steps": steps
-                        })
-                    except asyncio.QueueFull:
-                        # 如果队列满了，可以忽略这次更新，避免阻塞
-                        pass
-
-                # 将中文场景描述翻译成英文prompt
-                english_prompt = deepseek.translate_to_english(scene_cn)
-                logger.info(f"场景翻译完成: {english_prompt}")
-
-                # 构建适合本地diffusion的英文提示词
-                prompt = f"comic style, {english_prompt}, detailed, high quality"
-                logger.info(f"生成提示词: {prompt}")
-
-                # 启动图像生成任务
-                loop = asyncio.get_event_loop()
-                executor = loop.run_in_executor
-                gen_task = executor(
-                    None,
-                    diffusion_service.generate_image_with_style,
-                    prompt, "comic", steps, guidance, width, height, progress_callback
-                )
-
-                # 同时监听进度队列
-                done = False
-                while not done:
-                    try:
-                        # 等待队列消息或生成任务完成
-                        progress_task = asyncio.create_task(queue.get())
-                        finished, pending = await asyncio.wait(
-                            [gen_task, progress_task],
-                            return_when=asyncio.FIRST_COMPLETED
-                        )
-
-                        if progress_task in finished:
-                            progress_data = progress_task.result()
-                            yield f"data: {json.dumps(progress_data)}\n\n"
-
-                        if gen_task in finished:
-                            image_url = gen_task.result()
-                            # 确保所有剩余的进度消息都被处理
-                            while not queue.empty():
-                                progress_data = queue.get_nowait()
-                                yield f"data: {json.dumps(progress_data)}\n\n"
-                            
-                            logger.info(f"图片生成完成")
-                
-                            # 保存图片到临时目录
-                            image_data = base64.b64decode(image_url.split(',')[1])
-                            image_path = os.path.join(temp_dir, f"scene_{i+1}.png")
-                            with open(image_path, "wb") as f:
-                                f.write(image_data)
-                            image_paths.append(image_path)
-
-
-                            # 只发送中文描述
-                            yield f"data: {json.dumps({'type': 'scene', 'index': i, 'description': scene_cn, 'image_url': image_url})}\n\n"
-                            done = True
-                            # 取消可能仍在等待的progress_task
-                            if not progress_task.done():
-                                progress_task.cancel()
-                        
-                    except Exception as task_e:
-                        logger.error(f"任务执行中发生错误: {task_e}")
-                        done = True
-                        if 'progress_task' in locals() and not progress_task.done():
-                            progress_task.cancel()
-                        raise task_e
-
-            except Exception as e:
-                error_msg = f"场景 {i+1} 生成失败: {str(e)}"
-                logger.error(error_msg)
-                yield f"data: {json.dumps({'type': 'scene_error', 'index': i, 'message': error_msg})}\n\n"
-        
-        # 发送图片生成完成的消息，并包含会话ID
-        yield f"data: {json.dumps({'type': 'all_images_generated', 'session_id': session_id})}\n\n"
-        
-        # 发送完成消息，以便前端正常关闭连接
-        yield f"data: {json.dumps({'type': 'complete'})}\n\n"
+            raise HTTPException(status_code=400, detail="请先加载模型")
             
+        # 生成唯一的 job_id
+        job_id = str(uuid.uuid4())
+        
+        task_data = {
+            "text": request.text,
+            "num_scenes": request.num_scenes,
+            "steps": 30,
+            "guidance": 7.5,
+            "width": 512,
+            "height": 512,
+            "model_name": diffusion_service.model_name,
+            "job_id": job_id  # 确保包含 job_id
+        }
+        
+        # 检查队列长度
+        if len(task_queue) + len(Worker.all(connection=redis_conn)) > 20:
+            raise HTTPException(status_code=429, detail="队列已满，请稍后再试")
+            
+        # 提交任务到队列
+        job = task_queue.enqueue(
+            run_comic_task,
+            task_data,
+            job_id=job_id,  # 使用相同的 job_id
+            result_ttl=86400  # 结果保留24小时
+        )
+        
+        # 获取队列位置
+        jobs = task_queue.get_jobs()
+        position = next((i for i, j in enumerate(jobs) if j.id == job_id), 0)
+        
+        return {
+            "job_id": job_id,
+            "position": position + 1,
+            "status": "queued" if position > 0 else "running"
+        }
+        
     except Exception as e:
-        error_msg = f"错误: {str(e)}\n{traceback.format_exc()}"
+        logger.error(f"提交任务失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+@app.get("/task-status/{job_id}")
+async def get_task_status(job_id: str):
+    """获取任务状态"""
+    try:
+        job = Job.fetch(job_id, connection=redis_conn)
+        
+        if job.is_finished:
+            return {"status": "completed", "result": job.result}
+        elif job.is_failed:
+            return {"status": "failed", "error": str(job.exc_info)}
+        elif job.is_started:
+            return {"status": "running", "progress": job.meta.get("progress", 0)}
+        else:
+            # 获取队列位置
+            jobs = task_queue.get_jobs()
+            position = next((i for i, j in enumerate(jobs) if j.id == job_id), 0)
+            return {
+                "status": "queued",
+                "position": position + 1,
+                "total_in_queue": len(jobs)
+            }
+    except Exception:
+        raise HTTPException(status_code=404, detail="任务不存在")
+
+@app.websocket("/ws/task-updates/{job_id}")
+async def websocket_task_updates(websocket: WebSocket, job_id: str):
+    await websocket.accept()
+    try:
+        while True:
+            status = await get_task_status(job_id)
+            await websocket.send_json(status)
+            
+            if status["status"] in ["completed", "failed"]:
+                break
+                
+            await asyncio.sleep(1)
+    except WebSocketDisconnect:
+        pass
+    except Exception as e:
+        logger.error(f"WebSocket错误: {str(e)}")
+        await websocket.send_json({"error": str(e)})
+
+def run_comic_task(task_data):
+    """
+    执行漫画生成任务的核心函数
+    参数:
+        task_data (dict): 包含任务参数的字典，必须包含以下键:
+            - job_id: 任务ID
+            - text: 小说文本
+            - num_scenes: 场景数量
+            - steps: 生成步骤数 (可选，默认30)
+            - guidance: 引导系数 (可选，默认7.5)
+            - width: 图片宽度 (可选，默认512)
+            - height: 图片高度 (可选，默认512)
+            - model_name: 模型名称
+    """
+    try:
+        # ========== 参数验证 ==========
+        required_keys = ['job_id', 'text', 'num_scenes', 'model_name']
+        for key in required_keys:
+            if key not in task_data:
+                raise ValueError(f"任务数据缺少必要参数: {key}")
+
+        job_id = task_data['job_id']
+        job = Job.fetch(job_id, connection=redis_conn)
+        
+        # 设置默认参数
+        steps = task_data.get('steps', 30)
+        guidance = task_data.get('guidance', 7.5)
+        width = task_data.get('width', 512)
+        height = task_data.get('height', 512)
+        text = task_data['text']
+        num_scenes = task_data['num_scenes']
+        model_name = task_data['model_name']
+
+        # ========== 初始化服务 ==========
+        deepseek = DeepSeekService()
+        diffusion_service.set_model(model_name)
+        
+        # ========== 场景分割 ==========
+        job.meta['progress'] = 5
+        job.meta['stage'] = '正在分割场景'
+        job.save_meta()
+        
+        scenes_cn = deepseek.split_into_scenes_cn(text, num_scenes)
+        total_scenes = len(scenes_cn)
+        
+        # ========== 任务进度跟踪 ==========
+        results = []
+        for i, scene_cn in enumerate(scenes_cn):
+            # 更新进度
+            progress = int((i + 1) / total_scenes * 90) + 5  # 5-95%
+            job.meta.update({
+                'progress': progress,
+                'stage': f'正在生成场景 {i+1}/{total_scenes}',
+                'current_scene': scene_cn
+            })
+            job.save_meta()
+            
+            # ========== 生成英文提示词 ==========
+            english_prompt = deepseek.translate_to_english(scene_cn)
+            prompt = f"comic style, {english_prompt}, detailed, high quality"
+            
+            # ========== 图片生成 ==========
+            try:
+                image_url = diffusion_service.generate_image_with_style(
+                    prompt=prompt,
+                    style="comic",
+                    steps=steps,
+                    guidance=guidance,
+                    width=width,
+                    height=height
+                )
+            except Exception as e:
+                logger.error(f"场景 {i} 生成失败: {str(e)}")
+                image_url = None
+                
+            # ========== 保存结果 ==========
+            results.append({
+                'scene_id': i,
+                'scene_text': scene_cn,
+                'prompt': prompt,
+                'image_url': image_url,
+                'timestamp': datetime.now().isoformat()
+            })
+            
+            job.meta['last_generated'] = image_url
+            job.save_meta()
+
+        # ========== 任务完成 ==========
+        job.meta.update({
+            'progress': 100,
+            'stage': '已完成',
+            'completed_at': datetime.now().isoformat()
+        })
+        job.save_meta()
+        
+        return {
+            'status': 'success',
+            'scenes': results,
+            'parameters': {
+                'model_used': model_name,
+                'steps': steps,
+                'guidance': guidance,
+                'resolution': f"{width}x{height}"
+            }
+        }
+        
+    except Exception as e:
+        # ========== 错误处理 ==========
+        error_msg = f"任务执行失败: {str(e)}"
         logger.error(error_msg)
-        yield f"data: {json.dumps({'type': 'error', 'message': error_msg})}\n\n"
-
-
-@app.post("/regenerate-image")
-async def regenerate_image(request: dict):
-    try:
-        scene_index = request.get("sceneIndex")
-
-        logger.info(f"收到重新生成图片请求: scene_index={scene_index}")
-
-        if scene_index is None:
-            raise HTTPException(status_code=400, detail="Missing scene_index parameter")
-
-        # 这里可以实现重新生成逻辑
-        # 暂时返回错误信息
-        return {
-            "success": False,
-            "message": "重新生成功能暂未实现"
-        }
-
-    except Exception as e:
-        logger.error(f"重新生成图片失败: {str(e)}")
-        return {
-            "success": False,
-            "message": str(e)
-        }
-
-
-@app.get("/video", response_class=HTMLResponse)
-async def get_video_page():
-    """获取视频播放页面"""
-    return FileResponse("templates/video.html")
-
-
-@app.post("/create-video")
-async def create_video(request: dict):
-    """根据会话ID创建视频"""
-    try:
-        session_id = request.get("session_id")
-        if not session_id:
-            raise HTTPException(status_code=400, detail="Missing session_id parameter")
         
-        logger.info(f"开始创建视频，会话ID: {session_id}")
+        if 'job' in locals():
+            job.meta.update({
+                'progress': 0,
+                'stage': '失败',
+                'error': error_msg,
+                'traceback': traceback.format_exc()
+            })
+            job.save_meta()
         
-        temp_dir = os.path.join("temp", session_id)
-        if not os.path.exists(temp_dir):
-            raise HTTPException(status_code=404, detail="Session not found")
-        
-        image_paths = sorted([os.path.join(temp_dir, f) for f in os.listdir(temp_dir) if f.endswith(".png")])
-        
-        if not image_paths:
-            raise HTTPException(status_code=400, detail="No images found for this session")
-        
-        # 生成视频
-        video_output_dir = os.path.join("static", "videos")
-        if not os.path.exists(video_output_dir):
-            os.makedirs(video_output_dir)
-        
-        video_path = os.path.join(video_output_dir, f"{session_id}.mp4")
-        diffusion_service.create_video_from_images(image_paths, video_path)
-        logger.info(f"视频生成成功: {video_path}")
-        
-        # 清理临时文件
-        shutil.rmtree(temp_dir)
-        logger.info(f"已清理临时目录: {temp_dir}")
-        
-        return {"success": True, "video_url": f"/static/videos/{session_id}.mp4"}
-        
-    except Exception as e:
-        logger.error(f"创建视频失败: {str(e)}")
-        import traceback
-        logger.error(f"详细错误信息: {traceback.format_exc()}")
-        return {"success": False, "message": str(e)}
+        raise  # 重新抛出异常以便RQ记录失败状态
+# 资源监控线程
+def resource_monitor():
+    """后台资源监控线程"""
+    while True:
+        try:
+            # 检查系统资源
+            cpu_usage = psutil.cpu_percent(interval=1)
+            mem = psutil.virtual_memory()
+            
+            # 如果有GPU则检查显存
+            gpu_ok = True
+            try:
+                import pynvml
+                pynvml.nvmlInit()
+                handle = pynvml.nvmlDeviceGetHandleByIndex(0)
+                mem_info = pynvml.nvmlDeviceGetMemoryInfo(handle)
+                free_gpu_mem = mem_info.free / (1024 * 1024)  # MB
+                gpu_ok = free_gpu_mem > 2000  # 2GB显存需求
+            except ImportError:
+                pass
+                
+            # 如果资源充足且队列中有任务，启动worker
+            if (cpu_usage < 80 and mem.available / (1024 * 1024) > 500 and gpu_ok 
+                and len(task_queue) > 0 and len(Worker.all(connection=redis_conn)) == 0):
+                worker = Worker([task_queue], connection=redis_conn)
+                worker.work(burst=True)  # 只处理一个任务
+                
+            time.sleep(5)
+        except Exception as e:
+            logger.error(f"资源监控错误: {str(e)}")
+            time.sleep(10)
 
+# 启动资源监控线程
+monitor_thread = threading.Thread(target=resource_monitor, daemon=True)
+monitor_thread.start()
 
 if __name__ == "__main__":
     logger.info("启动服务器...")

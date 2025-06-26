@@ -126,6 +126,34 @@
         #currentModelInfo { display: none; }
         #modelSelectionArea { display: none; margin-top: 10px; }
         #initialModelSelection { display: flex; }
+
+        /* 新增队列状态样式 */
+        #queueStatus {
+            margin-bottom: 20px;
+            padding: 15px;
+            border-radius: 8px;
+        }
+        
+        .queue-info {
+            margin-top: 10px;
+            font-size: 14px;
+        }
+        
+        .queue-position {
+            font-weight: bold;
+            color: #007bff;
+        }
+        
+        .wait-time {
+            font-weight: bold;
+            color: #28a745;
+        }
+        
+        .resource-status {
+            margin-top: 10px;
+            font-size: 13px;
+            color: #6c757d;
+        }
     </style>
 </head>
 <body>
@@ -173,6 +201,7 @@
         
         <button id="generateBtn" onclick="generateComic()">生成漫画</button>
     </div>
+    <div id="queueStatus" class="message-box info" style="display:none;"></div>
     <div id="overallProgress" class="message-box info"></div>
     <div id="result"></div>
 </div>
@@ -181,6 +210,8 @@
     let selectedModel = null;
     let isModelLoaded = false;
     let isLoadingModel = false;
+    let currentTaskSocket = null;
+    let currentJobId = null;
 
     window.addEventListener('load', async function () {
         await loadAvailableModels();
@@ -263,7 +294,8 @@
         }
         try {
             const response = await fetch('/set-model', {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                method: 'POST', 
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ model_name: modelName })
             });
             const result = await response.json();
@@ -325,7 +357,10 @@
         statusDiv.textContent = message;
         statusDiv.className = `message-box ${type}`;
     }
-    function hideModelStatus() { document.getElementById('modelStatus').style.display = 'none'; }
+    
+    function hideModelStatus() { 
+        document.getElementById('modelStatus').style.display = 'none'; 
+    }
 
     function formatTime(seconds) {
         if (isNaN(seconds) || seconds < 0 || !isFinite(seconds)) return "计算中...";
@@ -334,7 +369,57 @@
         return `${mins}分 ${secs.toString().padStart(2, '0')}秒`;
     }
 
-    // 这是唯一且正确的 generateComic 函数
+    function estimateWaitTime(position) {
+        // 简单估算: 假设每个任务需要5分钟
+        const minutes = position * 5;
+        return minutes > 0 ? `约 ${minutes} 分钟` : '即将开始';
+    }
+
+    function initializePlaceholders(count) {
+        const resultDiv = document.getElementById('result');
+        resultDiv.innerHTML = '';
+        
+        for (let i = 0; i < count; i++) {
+            const sceneDiv = document.createElement('div');
+            sceneDiv.className = 'scene';
+            sceneDiv.id = `scene-${i}`;
+            sceneDiv.innerHTML = `
+                <h3>场景 ${i + 1}</h3>
+                <p id="desc-${i}" style="color: #888;"><i>等待场景描述...</i></p>
+                <div class="progress-bar-container">
+                    <div class="progress-bar" id="progress-bar-${i}">等待中...</div>
+                </div>
+                <div class="image-container" id="image-container-${i}" style="display:none;">
+                    <img src="" alt="场景 ${i + 1}">
+                </div>
+                <div class="image-actions" id="actions-${i}" style="display:none;">
+                    <button onclick="regenerateImage(${i})">重新生成</button>
+                </div>
+            `;
+            resultDiv.appendChild(sceneDiv);
+        }
+    }
+
+    function displayResults(results) {
+        const resultDiv = document.getElementById('result');
+        resultDiv.innerHTML = '';
+        
+        results.forEach((scene, index) => {
+            const sceneDiv = document.createElement('div');
+            sceneDiv.className = 'scene';
+            sceneDiv.innerHTML = `
+                <h3>场景 ${index + 1}</h3>
+                <p>${scene.description}</p>
+                <img src="${scene.image_url}" alt="场景 ${index + 1}">
+                <div class="image-actions">
+                    <button onclick="regenerateImage(${index})">重新生成</button>
+                </div>
+            `;
+            resultDiv.appendChild(sceneDiv);
+        });
+    }
+
+    // 主生成函数 - 修改为使用任务队列
     async function generateComic() {
         const text = document.getElementById('novelText').value;
         const numScenes = document.getElementById('numScenes').value;
@@ -343,96 +428,160 @@
         const width = document.getElementById('width').value;
         const height = document.getElementById('height').value;
         
-        const resultDiv = document.getElementById('result');
-        const overallProgressDiv = document.getElementById('overallProgress');
         const generateBtn = document.getElementById('generateBtn');
+        const queueStatusDiv = document.getElementById('queueStatus');
+        const overallProgressDiv = document.getElementById('overallProgress');
 
-        if (!isModelLoaded) { alert('请先选择并成功加载一个模型！'); return; }
-        if (!text.trim()) { alert('请输入小说文本！'); return; }
-
-        resultDiv.innerHTML = '';
-        overallProgressDiv.style.display = 'block';
-        overallProgressDiv.className = 'message-box info';
-        overallProgressDiv.innerHTML = '正在连接服务器...';
-        generateBtn.disabled = true;
-
-        let startTime = Date.now();
-        let scenesDone = 0;
-        let totalScenes = parseInt(numScenes);
-
-        const params = new URLSearchParams({ text, num_scenes: numScenes, steps, guidance, width, height });
-        const eventSource = new EventSource(`/novel-to-comic-stream?${params.toString()}`);
-
-        function initializePlaceholders(count) {
-            resultDiv.innerHTML = '';
-            for (let i = 0; i < count; i++) {
-                const sceneDiv = document.createElement('div');
-                sceneDiv.className = 'scene';
-                sceneDiv.id = `scene-${i}`;
-                sceneDiv.innerHTML = `
-                    <h3>场景 ${i + 1}</h3>
-                    <p id="desc-${i}" style="color: #888;"><i>等待场景描述...</i></p>
-                    <div class="progress-bar-container">
-                        <div class="progress-bar" id="progress-bar-${i}">等待中...</div>
-                    </div>
-                    <div class="image-container" id="image-container-${i}" style="display:none;">
-                        <img src="" alt="场景 ${i + 1}">
-                    </div>
-                    <div class="image-actions" id="actions-${i}" style="display:none;">
-                        <button onclick="regenerateImage(${i})">重新生成</button>
-                    </div>
-                `;
-                resultDiv.appendChild(sceneDiv);
-            }
+        if (!isModelLoaded) { 
+            alert('请先选择并成功加载一个模型！'); 
+            return; 
+        }
+        
+        if (!text.trim()) { 
+            alert('请输入小说文本！'); 
+            return; 
         }
 
-        eventSource.onmessage = function (event) {
+        // 重置状态
+        generateBtn.disabled = true;
+        queueStatusDiv.style.display = 'block';
+        queueStatusDiv.className = 'message-box info';
+        queueStatusDiv.innerHTML = '正在提交任务...';
+        overallProgressDiv.style.display = 'none';
+        document.getElementById('result').innerHTML = '';
+
+        // 关闭之前的WebSocket连接
+        if (currentTaskSocket) {
+            currentTaskSocket.close();
+            currentTaskSocket = null;
+        }
+
+        try {
+            // 提交任务到队列
+            const response = await fetch('/submit-task', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    text: text,
+                    num_scenes: numScenes,
+                    steps: steps,
+                    guidance: guidance,
+                    width: width,
+                    height: height
+                })
+            });
+            
+            const taskInfo = await response.json();
+            currentJobId = taskInfo.job_id;
+            
+            // 根据任务状态处理
+            if (taskInfo.status === 'queued') {
+                queueStatusDiv.innerHTML = `
+                    <div>您的任务正在排队中...</div>
+                    <div class="queue-info">
+                        当前位置: <span class="queue-position">${taskInfo.position}</span>
+                        <br>预计等待时间: <span class="wait-time">${estimateWaitTime(taskInfo.position)}</span>
+                    </div>
+                    <div class="resource-status">系统正在分配资源，请耐心等待...</div>
+                `;
+            } else {
+                queueStatusDiv.innerHTML = `
+                    <div>您的任务已开始执行!</div>
+                    <div class="resource-status">系统资源充足，正在生成漫画...</div>
+                `;
+            }
+            
+            // 建立WebSocket连接获取实时状态
+            setupTaskWebSocket(currentJobId);
+            
+        } catch (error) {
+            queueStatusDiv.className = 'message-box error';
+            queueStatusDiv.innerHTML = `提交任务失败: ${error.message}`;
+            generateBtn.disabled = false;
+        }
+    }
+
+    function setupTaskWebSocket(jobId) {
+        const protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+        const socketUrl = `${protocol}${window.location.host}/ws/task-updates/${jobId}`;
+        
+        currentTaskSocket = new WebSocket(socketUrl);
+        const queueStatusDiv = document.getElementById('queueStatus');
+        const overallProgressDiv = document.getElementById('overallProgress');
+        const generateBtn = document.getElementById('generateBtn');
+        let startTime = Date.now();
+
+        currentTaskSocket.onopen = function() {
+            console.log('WebSocket连接已建立');
+        };
+
+        currentTaskSocket.onmessage = function(event) {
             const data = JSON.parse(event.data);
-
-            switch (data.type) {
-                case 'start':
-                    totalScenes = data.total_scenes;
-                    initializePlaceholders(totalScenes);
-                    overallProgressDiv.innerHTML = `已获取故事大纲，共 ${totalScenes} 个场景，准备开始生成...`;
+            
+            if (data.error) {
+                queueStatusDiv.className = 'message-box error';
+                queueStatusDiv.innerHTML = data.error;
+                generateBtn.disabled = false;
+                return;
+            }
+            
+            switch(data.status) {
+                case 'queued':
+                    queueStatusDiv.innerHTML = `
+                        <div>您的任务正在排队中...</div>
+                        <div class="queue-info">
+                            当前位置: <span class="queue-position">${data.position}</span>
+                            <br>队列中总任务数: ${data.total_in_queue}
+                            <br>预计等待时间: <span class="wait-time">${estimateWaitTime(data.position)}</span>
+                        </div>
+                        <div class="resource-status">系统资源紧张，正在等待资源释放...</div>
+                    `;
                     break;
-                
-                case 'info':
-                    overallProgressDiv.innerHTML = data.message;
-                    break;
+                    
+                case 'running':
+                    if (data.progress > 0) {
+                        // 任务已开始执行
+                        queueStatusDiv.style.display = 'none';
+                        overallProgressDiv.style.display = 'block';
+                        overallProgressDiv.className = 'message-box info';
+                        overallProgressDiv.innerHTML = `任务执行中... 进度: ${Math.round(data.progress)}%`;
+                        
+                        // 初始化场景占位符
+                        if (data.total_scenes && document.getElementById('scene-0') === null) {
+                            initializePlaceholders(data.total_scenes);
+                        }
+                        
+                        // 更新场景进度
+                        if (data.scene_index !== undefined) {
+                            const progressBar = document.getElementById(`progress-bar-${data.scene_index}`);
+                            if (progressBar) {
+                                const percentage = Math.round(data.progress);
+                                progressBar.style.width = `${percentage}%`;
+                                progressBar.textContent = `${percentage}%`;
+                            }
+                            
+                            // 场景完成时更新描述和图片
+                            if (data.scene_description && data.image_url) {
+                                document.getElementById(`desc-${data.scene_index}`).innerHTML = data.scene_description;
+                                const progressBarContainer = document.getElementById(`progress-bar-${data.scene_index}`).parentElement;
+                                progressBarContainer.style.display = 'none';
 
-                case 'progress': {
-                    const { index, step, total_steps } = data;
-                    const progressBar = document.getElementById(`progress-bar-${index}`);
-                    if (progressBar) {
-                        const percentage = Math.round((step / total_steps) * 100);
-                        progressBar.style.width = `${percentage}%`;
-                        progressBar.textContent = `${percentage}%`;
+                                const imageContainer = document.getElementById(`image-container-${data.scene_index}`);
+                                imageContainer.style.display = 'block';
+                                imageContainer.querySelector('img').src = data.image_url;
+                                document.getElementById(`actions-${data.scene_index}`).style.display = 'block';
+                            }
+                        }
                     }
                     break;
-                }
-
-                case 'scene': {
-                    scenesDone++;
-                    const { index, description, image_url } = data;
-                    document.getElementById(`desc-${index}`).innerHTML = description;
-                    const progressBarContainer = document.getElementById(`progress-bar-${index}`).parentElement;
-                    progressBarContainer.style.display = 'none';
-
-                    const imageContainer = document.getElementById(`image-container-${index}`);
-                    imageContainer.style.display = 'block';
-                    imageContainer.querySelector('img').src = image_url;
-                    document.getElementById(`actions-${index}`).style.display = 'block';
                     
-                    const elapsedTime = (Date.now() - startTime) / 1000;
-                    const avgTimePerScene = elapsedTime / scenesDone;
-                    const remainingScenes = totalScenes - scenesDone;
-                    const etaSeconds = avgTimePerScene * remainingScenes;
-                    overallProgressDiv.innerHTML = `已完成 ${scenesDone} / ${totalScenes}。预计剩余: ${formatTime(etaSeconds)}`;
-                    break;
-                }
-
-                // ### 新增逻辑：处理 all_images_generated 事件 ###
-                case 'all_images_generated': {
+                case 'completed':
+                    queueStatusDiv.style.display = 'none';
+                    overallProgressDiv.className = 'message-box success';
+                    overallProgressDiv.innerHTML = '所有场景已生成完毕！';
+                    generateBtn.disabled = false;
+                    
+                    // 显示生成视频按钮
                     const createVideoBtn = document.createElement('button');
                     createVideoBtn.textContent = '开始生成视频';
                     createVideoBtn.style.marginTop = '20px';
@@ -467,50 +616,39 @@
                             createVideoBtn.disabled = false;
                         }
                     };
-                    resultDiv.appendChild(createVideoBtn);
+                    document.getElementById('result').appendChild(createVideoBtn);
+                    
+                    setTimeout(() => { 
+                        overallProgressDiv.style.display = 'none'; 
+                    }, 5000);
                     break;
-                }
-
-                case 'scene_error': {
-                    scenesDone++;
-                    const { index, message } = data;
-                    const sceneDiv = document.getElementById(`scene-${index}`);
-                    if (sceneDiv) {
-                        sceneDiv.innerHTML = `<h3>场景 ${index + 1}</h3><div class="message-box error">${message}</div>`;
-                    }
-                    break;
-                }
-                        
-                case 'complete':
-                    overallProgressDiv.className = 'message-box success';
-                    overallProgressDiv.innerHTML = '所有场景已生成完毕！';
-                    eventSource.close();
-                    generateBtn.disabled = false;
-                    setTimeout(() => { overallProgressDiv.style.display = 'none'; }, 5000);
-                    break;
-                
-                case 'error':
-                    overallProgressDiv.className = 'message-box error';
-                    overallProgressDiv.innerHTML = `发生严重错误: ${data.message}`;
-                    eventSource.close();
+                    
+                case 'failed':
+                    queueStatusDiv.className = 'message-box error';
+                    queueStatusDiv.innerHTML = `任务失败: ${data.error}`;
+                    overallProgressDiv.style.display = 'none';
                     generateBtn.disabled = false;
                     break;
             }
         };
 
-        eventSource.onerror = function (error) {
-            overallProgressDiv.className = 'message-box error';
-            overallProgressDiv.innerHTML = '与服务器的连接已断开。请检查后台服务是否运行正常并重试。';
-            eventSource.close();
+        currentTaskSocket.onclose = function() {
+            console.log('WebSocket连接已关闭');
+            currentTaskSocket = null;
+        };
+
+        currentTaskSocket.onerror = function(error) {
+            queueStatusDiv.className = 'message-box error';
+            queueStatusDiv.innerHTML = '与服务器的连接出现错误';
+            overallProgressDiv.style.display = 'none';
             generateBtn.disabled = false;
         };
     }
     
-    // regenerateImage 函数暂时保持不变，因为后端未实现
+    // regenerateImage 函数暂时保持不变
     async function regenerateImage(sceneIndex) {
         alert(`重新生成场景 ${sceneIndex + 1} 的功能正在开发中！`);
     }
-
 </script>
 </body>
 </html>
