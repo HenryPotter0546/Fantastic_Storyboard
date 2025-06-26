@@ -636,8 +636,9 @@
         }
 
         try {
-            const params = new URLSearchParams(params);
-            const response = await fetch(`/novel-to-comic-stream?${params.toString()}`, {
+            alert('发送模型参数',params);
+            const urlParams = new URLSearchParams(params);
+            const response = await fetch(`/novel-to-comic-stream?${urlParams.toString()}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
 
