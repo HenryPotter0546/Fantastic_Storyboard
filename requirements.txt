@@ -12,4 +12,7 @@ accelerate==0.25.0
 PyYAML==6.0.1
 huggingface_hub==0.19.4
 omegaconf==2.3.0
-ffmpeg-python==0.2.0
+ffmpeg-python==0.2.
+python-jose==3.5.0
+SQLAlchemy==2.0.41
+passlib==1.7.4
