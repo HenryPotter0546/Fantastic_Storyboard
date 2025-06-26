@@ -32,6 +32,9 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 # 创建全局的diffusion服务实例
 diffusion_service = LocalDiffusionService()
 
+# 全局变量用于控制重新生成
+regeneration_active = False
+current_generation_task = None
 
 class NovelRequest(BaseModel):
     text: str
@@ -102,6 +105,11 @@ async def read_main_app():
 @app.get("/login", response_class=HTMLResponse)
 async def read_login_page_again():
     return FileResponse("templates/login.html")
+
+
+@app.get("/pic", response_class=HTMLResponse)
+async def pic_page():
+    return FileResponse("templates/pic.html")
 
 
 @app.get("/available-models")
@@ -251,17 +259,17 @@ async def generate_scenes(
     try:
         logger.info(f"开始处理请求, 参数: num_scenes={num_scenes}, steps={steps}, guidance={guidance}")
         logger.info(f"开始处理请求，会话ID: {session_id}")
-        
+
         # 创建一个临时目录来存放生成的图片
         temp_dir = os.path.join("temp", session_id)
         if not os.path.exists(temp_dir):
             os.makedirs(temp_dir)
-        
+
         image_paths = []
         # 初始化服务
         logger.info("初始化服务...")
         deepseek = DeepSeekService()
-        
+
         # 检查是否已设置模型
         if diffusion_service.model_name is None:
             error_msg = "请先选择并加载模型"
@@ -283,7 +291,7 @@ async def generate_scenes(
                 return
 
         # 分割场景（得到中文描述）
-        logger.info("向前端发送“开始分割场景”...")
+        logger.info("向前端发送""开始分割场景...")
         yield f"data: {json.dumps({'type': 'info', 'message': '正在分割场景，这可能需要一些时间...'})}\n\n"
         logger.info("开始分割场景")
 
@@ -298,9 +306,10 @@ async def generate_scenes(
         )
         
         logger.info(f"场景分割完成，共 {len(scenes_cn)} 个场景")
-        # 发送场景总数，以便前端初始化
-        yield f"data: {json.dumps({'type': 'start', 'total_scenes': len(scenes_cn)})}\n\n"
         
+        # 发送场景信息，包含session_id
+        yield f"data: {json.dumps({'type': 'start', 'total_scenes': len(scenes_cn), 'scenes': scenes_cn, 'session_id': session_id})}\n\n"
+
         # 为每个场景生成图片
         logger.info("开始生成图片...")
         for i, scene_cn in enumerate(scenes_cn):
@@ -314,7 +323,6 @@ async def generate_scenes(
                             "type": "progress", "index": i, "step": step + 1, "total_steps": steps
                         })
                     except asyncio.QueueFull:
-                        # 如果队列满了，可以忽略这次更新，避免阻塞
                         pass
 
                 # 将中文场景描述翻译成英文prompt
@@ -355,9 +363,9 @@ async def generate_scenes(
                             while not queue.empty():
                                 progress_data = queue.get_nowait()
                                 yield f"data: {json.dumps(progress_data)}\n\n"
-                            
+
                             logger.info(f"图片生成完成")
-                
+
                             # 保存图片到临时目录
                             image_data = base64.b64decode(image_url.split(',')[1])
                             image_path = os.path.join(temp_dir, f"scene_{i+1}.png")
@@ -365,14 +373,13 @@ async def generate_scenes(
                                 f.write(image_data)
                             image_paths.append(image_path)
 
-
                             # 只发送中文描述
                             yield f"data: {json.dumps({'type': 'scene', 'index': i, 'description': scene_cn, 'image_url': image_url})}\n\n"
                             done = True
                             # 取消可能仍在等待的progress_task
                             if not progress_task.done():
                                 progress_task.cancel()
-                        
+
                     except Exception as task_e:
                         logger.error(f"任务执行中发生错误: {task_e}")
                         done = True
@@ -384,7 +391,7 @@ async def generate_scenes(
                 error_msg = f"场景 {i+1} 生成失败: {str(e)}"
                 logger.error(error_msg)
                 yield f"data: {json.dumps({'type': 'scene_error', 'index': i, 'message': error_msg})}\n\n"
-        
+
         # 发送图片生成完成的消息，并包含会话ID
         yield f"data: {json.dumps({'type': 'all_images_generated', 'session_id': session_id})}\n\n"
 
@@ -399,23 +406,86 @@ async def generate_scenes(
 
 @app.post("/regenerate-image")
 async def regenerate_image(request: dict):
+    global regeneration_active, current_generation_task
+
     try:
+        description = request.get("description")
         scene_index = request.get("sceneIndex")
+        steps = request.get("steps", 30)  # 新增：从请求中获取steps参数，默认为30
 
-        logger.info(f"收到重新生成图片请求: scene_index={scene_index}")
+        logger.info(f"收到重新生成图片请求: scene_index={scene_index}, description={description}, steps={steps}")
 
-        if scene_index is None:
-            raise HTTPException(status_code=400, detail="Missing scene_index parameter")
+        if scene_index is None or description is None:
+            raise HTTPException(status_code=400, detail="Missing description or scene_index parameter")
 
-        # 这里可以实现重新生成逻辑
-        # 暂时返回错误信息
-        return {
-            "success": False,
-            "message": "重新生成功能暂未实现"
-        }
+        # 检查是否已设置模型
+        if diffusion_service.model_name is None:
+            return {
+                "success": False,
+                "message": "请先选择并加载模型"
+            }
+
+        # 检查模型是否已加载
+        if not diffusion_service.is_model_loaded():
+            return {
+                "success": False,
+                "message": "模型未加载，请先加载模型"
+            }
+
+        # 设置重新生成标志，暂停当前生成任务
+        regeneration_active = True
+
+        # 如果有正在进行的生成任务，等待其暂停
+        if current_generation_task and not current_generation_task.done():
+            logger.info("等待当前生成任务暂停...")
+            await asyncio.sleep(1)
+
+        try:
+            # 初始化服务
+            deepseek = DeepSeekService()
+
+            # 将中文描述翻译成英文
+            english_prompt = deepseek.translate_to_english(description)
+            logger.info(f"翻译完成: {english_prompt}")
+
+            # 转换为适合图像生成的提示词
+            image_prompt = deepseek.convert_to_image_prompt(english_prompt)
+            logger.info(f"图像提示词生成完成: {image_prompt}")
+
+            # 构建最终提示词
+            final_prompt = f"comic style, {image_prompt}, detailed, high quality"
+            logger.info(f"最终提示词: {final_prompt}")
+
+            # 生成图片，使用传入的steps参数
+            image_url = diffusion_service.generate_image_with_style(
+                final_prompt,
+                "comic",
+                steps,  # 使用传入的steps参数
+                7.5,  # guidance_scale
+                512,  # width
+                512  # height
+            )
+
+            logger.info("重新生成图片完成")
+
+            return {
+                "success": True,
+                "image_url": image_url
+            }
+
+        except Exception as e:
+            logger.error(f"重新生成图片失败: {str(e)}")
+            return {
+                "success": False,
+                "message": f"重新生成失败: {str(e)}"
+            }
+        finally:
+            # 重新生成完成，恢复正常生成
+            regeneration_active = False
 
     except Exception as e:
-        logger.error(f"重新生成图片失败: {str(e)}")
+        regeneration_active = False
+        logger.error(f"重新生成图片请求处理失败: {str(e)}")
         return {
             "success": False,
             "message": str(e)
@@ -435,33 +505,33 @@ async def create_video(request: dict):
         session_id = request.get("session_id")
         if not session_id:
             raise HTTPException(status_code=400, detail="Missing session_id parameter")
-        
+
         logger.info(f"开始创建视频，会话ID: {session_id}")
-        
+
         temp_dir = os.path.join("temp", session_id)
         if not os.path.exists(temp_dir):
             raise HTTPException(status_code=404, detail="Session not found")
-        
+
         image_paths = sorted([os.path.join(temp_dir, f) for f in os.listdir(temp_dir) if f.endswith(".png")])
-        
+
         if not image_paths:
             raise HTTPException(status_code=400, detail="No images found for this session")
-        
+
         # 生成视频
         video_output_dir = os.path.join("static", "videos")
         if not os.path.exists(video_output_dir):
             os.makedirs(video_output_dir)
-        
+
         video_path = os.path.join(video_output_dir, f"{session_id}.mp4")
         diffusion_service.create_video_from_images(image_paths, video_path)
         logger.info(f"视频生成成功: {video_path}")
-        
+
         # 清理临时文件
         shutil.rmtree(temp_dir)
         logger.info(f"已清理临时目录: {temp_dir}")
-        
+
         return {"success": True, "video_url": f"/static/videos/{session_id}.mp4"}
-        
+
     except Exception as e:
         logger.error(f"创建视频失败: {str(e)}")
         import traceback
