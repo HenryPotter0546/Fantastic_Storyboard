@@ -13,3 +13,9 @@ PyYAML==6.0.1
 huggingface_hub==0.19.4
 omegaconf==2.3.0
 ffmpeg-python==0.2.0
+psutil>=5.9.0
+redis>=4.5.1
+rq==1.9
+pynvml>=11.5.0  # 如果有NVIDIA GPU
+websockets
+rq-win==0.4.2
