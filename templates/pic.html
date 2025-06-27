@@ -495,10 +495,10 @@
                 resultDiv.appendChild(sceneDiv);
             }
         }
-        
+
         function handleStreamData(data, progressState) {
             // progressState 是一个包含 { startTime, scenesDone, totalScenes } 的对象
-    
+
             const resultDiv = document.getElementById('result');
             const overallProgressDiv = document.getElementById('overallProgress');
             // const generateBtn = document.getElementById('generateBtn');
@@ -511,13 +511,13 @@
                     initializePlaceholders(progressState.totalScenes, data.scenes);
                     overallProgressDiv.innerHTML = `已获取故事大纲，共 ${progressState.totalScenes} 个场景，准备开始生成...`;
                     break;
-                
+
                 case 'info':
                     overallProgressDiv.innerHTML = data.message;
                     break;
 
                 case 'progress': {
-                    const { index, step, total_steps } = data;
+                    const {index, step, total_steps} = data;
                     const progressBar = document.getElementById(`progress-bar-${index}`);
                     if (progressBar) {
                         const percentage = Math.round((step / total_steps) * 100);
@@ -529,8 +529,8 @@
 
                 case 'scene': {
                     progressState.scenesDone++; // 更新已完成的场景计数
-                    const { index, description, image_url } = data;
-                    
+                    const {index, description, image_url} = data;
+
                     const descElement = document.getElementById(`desc-${index}`);
                     if (descElement) {
                         descElement.innerHTML = description; // 使用 innerHTML 以支持可能的格式
@@ -539,17 +539,20 @@
                     }
 
                     const progressBarContainer = document.getElementById(`progress-bar-${index}`)?.parentElement;
-                    if(progressBarContainer) progressBarContainer.style.display = 'none';
+                    if (progressBarContainer) progressBarContainer.style.display = 'none';
 
                     const imageContainer = document.getElementById(`image-container-${index}`);
-                    if(imageContainer){
+                    if (imageContainer) {
                         imageContainer.style.display = 'block';
                         imageContainer.querySelector('img').src = image_url;
                     }
-                    
-                    const actionsContainer = document.getElementById(`actions-${index}`);
-                    if(actionsContainer) actionsContainer.style.display = 'block';
-                    
+
+                    // 修改：显示重新生成按钮
+                    const regenBtn = document.getElementById(`regen-btn-${index}`);
+                    if (regenBtn) {
+                        regenBtn.style.display = 'inline-block';
+                    }
+
                     // 恢复 ETA 计算
                     const elapsedTime = (Date.now() - progressState.startTime) / 1000;
                     const avgTimePerScene = elapsedTime / progressState.scenesDone;
@@ -563,17 +566,17 @@
                     const createVideoBtn = document.createElement('button');
                     createVideoBtn.textContent = '开始生成视频';
                     createVideoBtn.style.marginTop = '20px';
-                    createVideoBtn.onclick = async function() {
+                    createVideoBtn.onclick = async function () {
                         createVideoBtn.textContent = '视频生成中...';
                         createVideoBtn.disabled = true;
                         try {
                             const response = await fetch('/create-video', {
                                 method: 'POST',
-                                headers: { 
+                                headers: {
                                     'Content-Type': 'application/json',
                                     'Authorization': `Bearer ${token}` // 如果需要认证
                                 },
-                                body: JSON.stringify({ session_id: data.session_id })
+                                body: JSON.stringify({session_id: data.session_id})
                             });
                             const result = await response.json();
                             if (result.success) {
@@ -603,32 +606,34 @@
 
                 case 'scene_error': {
                     progressState.scenesDone++; // 即使失败，也算作一个处理单元
-                    const { index, message } = data;
+                    const {index, message} = data;
                     const sceneDiv = document.getElementById(`scene-${index}`);
                     if (sceneDiv) {
                         sceneDiv.innerHTML = `<h3>场景 ${index + 1}</h3><div class="message-box error">${message}</div>`;
                     }
                     break;
                 }
-                        
+
                 case 'complete':
                     overallProgressDiv.className = 'message-box success';
-                    const message = data.new_credit_balance !== undefined 
-                        ? '所有场景已生成完毕！' 
-                        : '所有场景已生成完毕！';
+                    const message = data.new_credit_balance !== undefined
+                            ? '所有场景已生成完毕！'
+                            : '所有场景已生成完毕！';
                     overallProgressDiv.innerHTML = message;
                     // generateBtn.disabled = false;
-                    setTimeout(() => { overallProgressDiv.style.display = 'none'; }, 5000);
-                    
+                    setTimeout(() => {
+                        overallProgressDiv.style.display = 'none';
+                    }, 5000);
+
                     // 刷新用户积分
                     getUserInfo();
                     break;
-                
+
                 case 'error':
                     overallProgressDiv.className = 'message-box error';
                     overallProgressDiv.innerHTML = `发生错误: ${data.message}`;
                     // generateBtn.disabled = false;
-                    
+
                     // 即使失败也刷新积分（因为可能已扣除）
                     getUserInfo();
                     break;
@@ -646,9 +651,9 @@
             const width = params.width
             const height = params.height
 
-            const urlParams = new URLSearchParams({ text, num_scenes, steps, guidance, width, height });
+            const urlParams = new URLSearchParams({text, num_scenes, steps, guidance, width, height});
             const response = await fetch(`/novel-to-comic-stream?${urlParams.toString()}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
+                headers: {'Authorization': `Bearer ${token}`}
             });
 
             if (!response.ok) {
@@ -661,7 +666,7 @@
             let buffer = ''; // 缓冲区，用于拼接不完整的数据块
 
             while (true) {
-                const { done, value } = await reader.read();
+                const {done, value} = await reader.read();
                 if (done) {
                     // 处理流结束时缓冲区可能剩余的最后一部分数据
                     if (buffer.startsWith('data: ')) {
@@ -673,8 +678,8 @@
                     break;
                 }
 
-                buffer += decoder.decode(value, { stream: true });
-                
+                buffer += decoder.decode(value, {stream: true});
+
                 // 查找完整的消息边界 `\n\n`
                 let boundary = buffer.indexOf('\n\n');
                 while (boundary !== -1) {
