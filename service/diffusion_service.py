@@ -301,6 +301,30 @@ class LocalDiffusionService:
         height: int = 512,
         callback: Optional[Callable] = None
     ) -> str:
+        # 开关：设置为 True 使用长提示词，False 使用精简版
+        USE_LONG_NEGATIVE_PROMPT = False 
+
+        # 长而全面的负向提示词 (适用于高 Token 上限模型)
+        long_negative_prompt = (
+            # 文字和签名移除
+            "text, letters, words, numbers, digits, writing, signature, watermark, logo, username, artist name, copyright, url, stamp, error, inscription, "
+            # 质量和解剖结构
+            "low quality, worst quality, bad quality, jpeg artifacts, blurry, noisy, grainy, ugly, disgusting, deformed, mutated, extra limbs, extra fingers, fewer fingers, bad anatomy, malformed limbs, mutated hands, poorly drawn hands, poorly drawn face, missing arms, missing legs, long neck, long body, disfigured, gross proportions, "
+            # 风格和构图
+            "out of frame, body out of frame, cropped, cut off, duplicate, two heads, black and white, monochrome, sketches, boring, dull"
+        )
+        
+        # 精简版负向提示词 (适用于低 Token 上限模型，如 SD 1.5)
+        short_negative_prompt = (
+            "text, letters, writing, signature, watermark, logo, " # 主要针对文字
+            "low quality, worst quality, bad quality, blurry, ugly, deformed, mutated hands, poorly drawn face" # 主要针对质量和常见崩坏点
+            "blurry face, blurred face, poorly drawn face, bad face, distorted face, extra eyes, missing eyes, asymmetrical eyes, cross-eyed, lazy eye, extra mouth, missing mouth, deformed mouth, extra nose, missing nose, deformed nose"
+        )
+
+        # 根据开关选择要使用的版本
+        negative_prompt_to_use = long_negative_prompt if USE_LONG_NEGATIVE_PROMPT else short_negative_prompt
+        logger.info(f"Using {'Long' if USE_LONG_NEGATIVE_PROMPT else 'Short'} Negative Prompt.")
+
         """根据风格生成图片"""
         try:
             # 根据风格调整提示词
@@ -310,14 +334,16 @@ class LocalDiffusionService:
                 "artistic": "artistic style, painterly, oil painting, masterpiece, beautiful composition",
                 "cartoon": "cartoon style, cute, colorful, simple lines, friendly",
                 "sketch": "sketch style, pencil drawing, black and white, artistic sketch",
-                "pixel": "pixel art style, 8-bit, retro gaming, pixelated, chibi"
+                "pixel": "pixel art style, 8-bit, retro gaming, pixelated, chibi",
+                "pixel_comic": "pixel art style, comic panel, comic book layout, 8-bit, 16-bit, low resolution, blocky, pixelated, clear lines, dynamic composition, retro gaming aesthetic"
             }
 
-            style_prompt = style_prompts.get(style, style_prompts["comic"])
+            style_prompt = style_prompts.get(style, style_prompts["pixel_comic"])
             full_prompt = f"{style_prompt}, {prompt}, high quality, detailed"
 
             return self.generate_image(
                 prompt=full_prompt,
+                negative_prompt=negative_prompt_to_use,
                 steps=steps,
                 guidance_scale=guidance_scale,
                 width=width,
