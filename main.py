@@ -254,7 +254,6 @@ async def generate_scenes(
     current_user: datamodels.User,
 ):
     logger.info(f"User {current_user.username} starting generation. Credits left: {current_user.credits}")
-
     session_id = str(uuid.uuid4())
     try:
         logger.info(f"开始处理请求, 参数: num_scenes={num_scenes}, steps={steps}, guidance={guidance}")
@@ -291,19 +290,11 @@ async def generate_scenes(
                 return
 
         # 分割场景（得到中文描述）
-        logger.info("向前端发送""开始分割场景...")
-        yield f"data: {json.dumps({'type': 'info', 'message': '正在分割场景，这可能需要一些时间...'})}\n\n"
+        yield f"data: {json.dumps({'type': 'info', 'message': '正在构思故事情节和分镜...'})}\n\n"
         logger.info("开始分割场景")
 
-        loop = asyncio.get_event_loop()
-        # loop.run_in_executor 会将同步函数 deepseek.split_into_scenes_cn 
-        # 放到一个独立的线程池中执行，这样它就不会阻塞主事件循环了。
-        scenes_cn = await loop.run_in_executor(
-            None,  # 使用默认的线程池执行器
-            deepseek.split_into_scenes_cn,
-            text,
-            num_scenes
-        )
+        scenes_cn = await deepseek.split_into_scenes_cn(text, num_scenes)
+        # scenes_cn = await deepseek.process_novel_to_scenes(text, num_scenes)
         
         logger.info(f"场景分割完成，共 {len(scenes_cn)} 个场景")
         
@@ -326,7 +317,7 @@ async def generate_scenes(
                         pass
 
                 # 将中文场景描述翻译成英文prompt
-                english_prompt = deepseek.translate_to_english(scene_cn)
+                english_prompt = await deepseek.translate_to_english(scene_cn)
                 logger.info(f"场景翻译完成: {english_prompt}")
 
                 # 构建适合本地diffusion的英文提示词
