@@ -177,6 +177,21 @@
         #initialModelSelection {
             display: flex;
         }
+
+        .button-group {
+            display: flex;
+            gap: 15px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+
+        .img2img-btn {
+            background-color: #17a2b8;
+        }
+
+        .img2img-btn:hover {
+            background-color: #138496;
+        }
     </style>
 </head>
 <body>
@@ -186,7 +201,7 @@
     <a href="#" id="logoutBtn">登出</a>
 </div>
 
-<div class="container">  
+<div class="container">
     <img src="/static/ThePromisedLand.png" alt="项目标识"
          style="max-width: 200px; display: block; margin: 0 auto 20px auto; border-radius: 8px;">
     <h1>小说转漫画服务</h1>
@@ -234,8 +249,11 @@
                                                                                    min="256" max="1024" step="64"></div>
             </div>
         </div>
-        
-        <button id="generateBtn" onclick="handleGenerateClick()">生成漫画</button>
+
+        <div class="button-group">
+            <button id="generateBtn" onclick="handleGenerateClick()">生成漫画</button>
+            <button id="img2imgBtn" class="img2img-btn" onclick="goToImg2Img()">去图生图</button>
+        </div>
     </div>
 </div>
 
@@ -266,7 +284,7 @@
     async function getUserInfo() {
         try {
             const response = await fetch('/users/me', {
-                headers: { 'Authorization': `Bearer ${token}` }
+                headers: {'Authorization': `Bearer ${token}`}
             });
             if (!response.ok) {
                 localStorage.removeItem('accessToken');
@@ -274,8 +292,8 @@
                 return;
             }
             currentUser = await response.json();
-            document.getElementById('userInfoText').textContent = 
-                `用户: ${currentUser.username} | 剩余积分: ${currentUser.credits}`;
+            document.getElementById('userInfoText').textContent =
+                    `用户: ${currentUser.username} | 剩余积分: ${currentUser.credits}`;
         } catch (error) {
             console.error('获取用户信息失败:', error);
             document.getElementById('userInfoText').innerHTML = `获取用户信息失败. <a href="/login">重新登录</a>`;
@@ -437,7 +455,7 @@
         document.getElementById('modelStatus').style.display = 'none';
     }
 
-    // --- 生成按钮的“守卫”函数 ---
+    // --- 生成按钮的"守卫"函数 ---
     function handleGenerateClick() {
 
         // 1. 前置检查
@@ -453,7 +471,7 @@
             alert('无法获取用户信息，请刷新页面重试。');
             return;
         }
-        
+
         const numScenes = parseInt(document.getElementById('numScenes').value);
         const requiredCredits = numScenes * 100;
         const text = document.getElementById('novelText').value;
@@ -481,6 +499,15 @@
 
         // 2. 所有检查通过，调用核心生成函数
         generateComic();
+    }
+
+    // --- 图生图功能 ---
+    function goToImg2Img() {
+        // 构建8081端口的img2img URL
+        const img2imgUrl = 'http://127.0.0.1:8081';
+
+        // 在新标签页中打开
+        window.open(img2imgUrl, '_blank');
     }
 
 </script>
