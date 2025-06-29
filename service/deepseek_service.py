@@ -2,6 +2,9 @@ import os
 import httpx
 from dotenv import load_dotenv
 
+import json
+
+
 load_dotenv()
 
 
@@ -14,10 +17,8 @@ class DeepSeekService:
         self.api_url = "https://api.deepseek.com/v1/chat/completions"
 
         # 创建一个可复用的异步客户端实例
-        self.client = httpx.AsyncClient(timeout=60.0) # 60s超时时间
-        
+        self.client = httpx.AsyncClient(timeout=60.0)
     async def translate_to_english(self, text: str) -> str:
-
         """将中文文本翻译成英文"""
         prompt = f"""请将以下中文文本翻译成英文，保持描述的准确性和艺术性。
         要求：
@@ -64,26 +65,14 @@ class DeepSeekService:
             translated_text = translated_text.split('\n')[0].strip()
             return translated_text
 
-            
-        # 捕获 httpx 异常
         except httpx.RequestError as e:
             raise Exception(f"调用DeepSeek API翻译失败: {str(e)}")
+
         except (KeyError, IndexError) as e:
             raise Exception(f"解析API响应失败: {str(e)}")
-            
-    async def split_into_scenes(self, novel_text, num_scenes=10):
+        
 
-        except requests.exceptions.RequestException as e:
-            error_detail = ""
-            try:
-                error_detail = response.json()
-            except:
-                error_detail = response.text
-            raise Exception(f"调用DeepSeek API翻译失败: {str(e)}\n错误详情: {error_detail}")
-        except (KeyError, IndexError) as e:
-            raise Exception(f"解析API响应失败: {str(e)}")
-
-    def convert_to_image_prompt(self, english_text: str) -> str:
+    async def convert_to_image_prompt(self, english_text: str) -> str:
         """将英文文本转换为适合模型生成图片的语句段"""
         prompt = f"""请将以下英文文本转换为适合AI图像生成模型的提示词格式。
         要求：
@@ -152,7 +141,7 @@ class DeepSeekService:
         }
 
         try:
-            response = requests.post(self.api_url, headers=headers, json=data)
+            response = await self.client.post(self.api_url, headers=headers, json=data)
             response.raise_for_status()
 
             result = response.json()
@@ -164,17 +153,18 @@ class DeepSeekService:
             image_prompt = image_prompt.split('\n')[0].strip()
             return image_prompt
 
-        except requests.exceptions.RequestException as e:
+        except httpx.RequestError as e:
             error_detail = ""
             try:
                 error_detail = response.json()
             except:
                 error_detail = response.text
-            raise Exception(f"调用DeepSeek API转换提示词失败: {str(e)}\n错误详情: {error_detail}")
+            raise Exception(f"调用DeepSeek API失败: {str(e)}\n错误详情: {error_detail}")
         except (KeyError, IndexError) as e:
             raise Exception(f"解析API响应失败: {str(e)}")
 
-    def split_into_scenes(self, novel_text, num_scenes=10):
+
+    async def split_into_scenes(self, novel_text, num_scenes=10):
 
         """将小说文本分割成场景描述"""
         prompt = f"""作为一个为小说配图的工作者，请将以下小说文本分割成{num_scenes}个场景，每个场景用一段简短的描述概括，适合用于生成漫画分镜。
@@ -252,7 +242,6 @@ class DeepSeekService:
             scenes = result['choices'][0]['message']['content'].split('\n')
             return [scene.strip() for scene in scenes if scene.strip()]
 
-            
         except httpx.RequestError as e:
 
             error_detail = ""
@@ -309,3 +298,88 @@ class DeepSeekService:
             raise Exception(f"调用DeepSeek API失败: {str(e)}\n错误详情: {error_detail}")
         except (KeyError, IndexError) as e:
             raise Exception(f"解析API响应失败: {str(e)}")
+        
+    async def process_novel_to_scenes(self, novel_text: str, num_scenes: int = 10) -> list[dict]:
+        """
+        一次性将小说文本处理成场景。
+        每个场景同时包含【中文描述】和【英文绘图提示词】。
+        """
+        prompt = f"""
+        你是一个专业的漫画改编总监。你的任务是将以下小说文本，改编成 {num_scenes} 个漫画分镜。
+        对于每一个分镜，你需要完成两件事：
+        1.  **中文场景描述**: 用一段流畅、优美的中文句子来描述这个场景的情节和画面感，供用户阅读。
+        2.  **英文绘图提示词 (Prompt)**: 根据场景描述，生成一段高质量的、逗号分隔的英文关键词组合，用于AI绘画。这个提示词需要包含核心人物、动作、表情、环境、构图和氛围。
+
+        请严格按照下面的 JSON 格式输出你的答案。返回一个包含 {num_scenes} 个对象的 JSON 数组，不要在前后添加任何额外的解释或文本。
+
+        **JSON 输出格式示例:**
+        ```json
+        [
+        {{
+            "chinese_description": "一个孤独的旅人，在被雨水浸湿的霓虹街道上，默默地收起他的伞，眼神中透露出一丝迷茫。",
+            "english_prompt": "1 boy, solo, futuristic city, neon lights, raining, wet streets, holding a clear umbrella, looking away, detailed, cinematic lighting, cyberpunk style, masterpiece"
+        }},
+        {{
+            "chinese_description": "在昏暗的酒馆角落，一位神秘的女士轻轻摇晃着手中的酒杯，猩红色的液体在杯中旋转，她的嘴角挂着一抹难以捉摸的微笑。",
+            "english_prompt": "1 girl, solo, sitting at a table in a dark bar, holding a wine glass, red liquid, mysterious smile, dimly lit, film noir style, detailed face, atmospheric"
+        }}
+        ]
+        ```
+        小说文本：
+        {novel_text}
+        """
+
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json"
+        }
+
+        data = {
+            "model": "deepseek-chat",
+            "messages": [
+                {
+                    "role": "system",
+                    "content": "你是一个遵循指令的专家，会严格按照用户要求的 JSON 格式输出结果。"
+                },
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ],
+            "temperature": 0.6,
+            "max_tokens": 3000 
+        }
+
+        raw_content = ""
+        try:
+            response = await self.client.post(self.api_url, headers=headers, json=data)
+            response.raise_for_status()
+            
+            result = response.json()
+            if 'choices' not in result or not result['choices']:
+                raise Exception("API返回的数据格式不正确")
+                
+            raw_content = result['choices'][0]['message']['content']
+            
+            # 更健壮的 JSON 提取方式
+            json_str = raw_content
+            if '```json' in json_str:
+                json_str = json_str.split('```json')[1].split('```')[0].strip()
+            elif '```' in json_str:
+                json_str = json_str.split('```')[1].strip()
+
+            # 解析 JSON 字符串
+            scenes_data = json.loads(json_str)
+            
+            if not isinstance(scenes_data, list):
+                raise ValueError("AI 没有返回有效的 JSON 数组")
+
+            return scenes_data
+
+        except httpx.RequestError as e:
+            error_detail = response.text if 'response' in locals() else str(e)
+            raise Exception(f"调用DeepSeek API失败: {str(e)}\n错误详情: {error_detail}")
+        except (json.JSONDecodeError, ValueError) as e:
+            raise Exception(f"解析返回的JSON失败: {e}\n原始返回内容: {raw_content}")
+        except Exception as e:
+            raise Exception(f"处理过程中发生错误: {str(e)}")
