@@ -438,50 +438,96 @@
     }
 
     // --- 生成按钮的“守卫”函数 ---
-    function handleGenerateClick() {
+    async function handleGenerateClick() {
+    if (!currentUser) {
+        alert('无法获取用户信息，请刷新页面重试。');
+        return;
+    }
 
-        // 1. 前置检查
-        if (!isModelLoaded) {
-            alert('请先选择并成功加载一个模型！');
+    const novelText = document.getElementById('novelText').value.trim();
+    if (!novelText) {
+        alert('请输入小说文本！');
+        return;
+    }
+
+    const numScenes = parseInt(document.getElementById('numScenes').value);
+    if (isNaN(numScenes) || numScenes < 1) {
+        alert('场景数量必须是大于0的整数！');
+        return;
+    }
+
+    const steps = parseInt(document.getElementById('steps').value);
+    if (isNaN(steps) || steps < 10) {
+        alert('迭代步数至少为10！');
+        return;
+    }
+
+    const guidance = parseFloat(document.getElementById('guidance').value);
+    if (isNaN(guidance) || guidance < 1) {
+        alert('引导系数至少为1！');
+        return;
+    }
+
+    const width = parseInt(document.getElementById('width').value);
+    const height = parseInt(document.getElementById('height').value);
+
+    const requiredCredits = numScenes * 100;
+    if (currentUser.credits < requiredCredits) {
+        alert(`积分不足！\n\n本次生成需要: ${requiredCredits} 积分\n您当前拥有: ${currentUser.credits} 积分\n\n请减少场景数量或等待积分重置。`);
+        return;
+    }
+
+    const comicParams = {
+        text: novelText,
+        num_scenes: numScenes,
+        steps: steps,
+        guidance: guidance,
+        width: width,
+        height: height
+    };
+
+    // 禁用按钮防止重复点击
+    const generateBtn = document.getElementById('generateBtn');
+    generateBtn.disabled = true;
+    generateBtn.textContent = '提交任务中...';
+
+    try {
+        // 保存参数到 sessionStorage，供 /pic 页面使用
+        sessionStorage.setItem('comicParams', JSON.stringify(comicParams));
+
+        // 提交生成任务
+        const response = await fetch('/submit-generation-task', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify(comicParams)
+        });
+
+        const result = await response.json();
+
+        if (!result.success) {
+            alert(`任务提交失败: ${result.message || '未知错误'}`);
+            generateBtn.disabled = false;
+            generateBtn.textContent = '生成漫画';
             return;
         }
-        if (!document.getElementById('novelText').value.trim()) {
-            alert('请输入小说文本！');
-            return;
-        }
-        if (!currentUser) {
-            alert('无法获取用户信息，请刷新页面重试。');
-            return;
-        }
-        
-        const numScenes = parseInt(document.getElementById('numScenes').value);
-        const requiredCredits = numScenes * 100;
-        const text = document.getElementById('novelText').value;
-        const steps = document.getElementById('steps').value;
-        const guidance = document.getElementById('guidance').value;
-        const width = document.getElementById('width').value;
-        const height = document.getElementById('height').value;
 
-        if (currentUser.credits < requiredCredits) {
-            alert(`积分不足！\n\n本次生成需要: ${requiredCredits} 积分\n您当前拥有: ${currentUser.credits} 积分\n\n请减少场景数量或等待明天积分重置。`);
-            return;
-        }
+        // 保存任务ID，供 /pic 页面轮询和显示使用
+        sessionStorage.setItem('generationTaskId', result.task_id);
 
-        const params = {
-            text: text,
-            num_scenes: numScenes,
-            steps: steps,
-            guidance: guidance,
-            width: width,
-            height: height
-        };
+        alert('任务已提交，您已进入排队队列。请耐心等待。');
 
-        sessionStorage.setItem('comicParams', JSON.stringify(params));
+        // 跳转到生成页面，开始显示生成过程
         window.location.href = '/pic';
 
-        // 2. 所有检查通过，调用核心生成函数
-        generateComic();
+    } catch (error) {
+        alert(`任务提交异常: ${error.message}`);
+        generateBtn.disabled = false;
+        generateBtn.textContent = '生成漫画';
     }
+}
 
 </script>
 </body>

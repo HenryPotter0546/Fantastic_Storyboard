@@ -20,15 +20,33 @@ from datetime import timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import Depends, status  
 from service.database import get_db
-
+from service.task_queue import TaskQueue
+from fastapi import FastAPI
+from contextlib import asynccontextmanager
+from fastapi import FastAPI
+import asyncio
+from pydantic import BaseModel
+from collections import defaultdict
+from fastapi import Query, Depends, HTTPException
+from fastapi.responses import StreamingResponse
+from sqlalchemy.ext.asyncio import AsyncSession
+from service import datamodels, auth
+import asyncio
+task_data_queues = defaultdict(asyncio.Queue)
 # 配置日志
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
+class GenerationTaskRequest(BaseModel):
+    text: str
+    num_scenes: int = 10
+    steps: int = 30
+    guidance: float = 7.5
+    width: int = 512
+    height: int = 512
 app = FastAPI(title="小说转漫画API")
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
-
+task_queue = TaskQueue(max_concurrent_tasks=1)
 # 创建全局的diffusion服务实例
 diffusion_service = LocalDiffusionService()
 
@@ -44,7 +62,17 @@ class NovelRequest(BaseModel):
 class SceneResponse(BaseModel):
     description: str
     image_url: str
+task_queue = TaskQueue(max_concurrent_tasks=1)
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # 应用启动前执行：启动worker
+    asyncio.create_task(task_queue.worker())
+    yield
+    # 应用关闭后执行：可释放资源，如果需要
+    # 例如 task_queue.cleanup() 或其它清理逻辑
+
+app = FastAPI(lifespan=lifespan)
 # --- 登录端点 ---
 @app.post("/token", response_model=schemas.Token)
 async def login_for_access_token(db: AsyncSession = Depends(get_db), form_data: OAuth2PasswordRequestForm = Depends()):
@@ -190,6 +218,58 @@ async def get_model_status():
         return {"is_loaded": False, "current_model": None, "message": str(e)}
 
 
+class GenerationTaskRequest(BaseModel):
+    text: str
+    num_scenes: int = 10
+    steps: int = 30
+    guidance: float = 7.5
+    width: int = 512
+    height: int = 512
+
+@app.post("/submit-generation-task")
+async def submit_generation_task(
+    request: GenerationTaskRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: datamodels.User = Depends(auth.get_current_user)
+):
+    # 积分校验同之前
+    required_credits = request.num_scenes * 100
+    if current_user.credits < required_credits:
+        return {"success": False, "message": f"积分不足。需要 {required_credits} 积分，但您只有 {current_user.credits}。"}
+
+    current_user.credits -= required_credits
+    db.add(current_user)
+    await db.commit()
+    await db.refresh(current_user)
+
+    # 创建任务异步函数，传入队列
+    task_data_queue = asyncio.Queue()
+
+    async def run_generation():
+        try:
+            async for event in generate_scenes(
+                text=request.text,
+                num_scenes=request.num_scenes,
+                steps=request.steps,
+                guidance=request.guidance,
+                width=request.width,
+                height=request.height,
+                db=db,
+                current_user=current_user
+            ):
+                await task_data_queue.put(event)
+        except Exception as e:
+            await task_data_queue.put({"type": "error", "message": str(e)})
+        finally:
+            await task_data_queue.put(None)
+
+    # 这里提交任务，并获取 task_id 和 future
+    task_id, future = task_queue.submit_task(run_generation)
+
+    # 绑定 task_data_queue 到全局字典
+    task_data_queues[task_id] = task_data_queue
+
+    return {"success": True, "task_id": task_id, "message": "任务已提交，排队等待资源使用"}
 @app.get("/novel-to-comic-stream")
 async def novel_to_comic_stream(
     text: str,
@@ -241,7 +321,6 @@ async def novel_to_comic_stream(
         ),
         media_type="text/event-stream"
     )
-
 
 async def generate_scenes(
     text: str,
@@ -537,8 +616,13 @@ async def create_video(request: dict):
         import traceback
         logger.error(f"详细错误信息: {traceback.format_exc()}")
         return {"success": False, "message": str(e)}
-
+# 新增任务状态查询接口
+@app.get("/task-status/{task_id}")
+async def task_status(task_id: str):
+    status = task_queue.get_status(task_id)
+    position = task_queue.get_queue_position(task_id)
+    return {"task_id": task_id, "status": status, "queue_position": position}
 
 if __name__ == "__main__":
     logger.info("启动服务器...")
-    uvicorn.run(app, host="0.0.0.0", port=8080)
+    uvicorn.run(app, host="0.0.0.0", port=8080) 
