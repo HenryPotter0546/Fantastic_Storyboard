@@ -20,6 +20,7 @@ from datetime import timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import Depends, status  
 from service.database import get_db
+from service.baidu_translate import BaiduTranslateService
 
 # 配置日志
 logging.basicConfig(level=logging.INFO)
@@ -269,6 +270,11 @@ async def generate_scenes(
         logger.info("初始化服务...")
         deepseek = DeepSeekService()
 
+
+        # 初始化百度翻译
+        baidu = BaiduTranslateService()
+        
+
         # 检查是否已设置模型
         if diffusion_service.model_name is None:
             error_msg = "请先选择并加载模型"
@@ -295,7 +301,6 @@ async def generate_scenes(
 
         scenes_cn = await deepseek.split_into_scenes_cn(text, num_scenes)
         # scenes_cn = await deepseek.process_novel_to_scenes(text, num_scenes)
-        
         logger.info(f"场景分割完成，共 {len(scenes_cn)} 个场景")
         
         # 发送场景信息，包含session_id
@@ -318,6 +323,10 @@ async def generate_scenes(
 
                 # 将中文场景描述翻译成英文prompt
                 english_prompt = await deepseek.translate_to_english(scene_cn)
+
+                # english_prompt = await baidu.translate_to_english(scene_cn)
+
+
                 logger.info(f"场景翻译完成: {english_prompt}")
 
                 # 构建适合本地diffusion的英文提示词

@@ -16,5 +16,9 @@ ffmpeg-python==0.2.
 python-jose==3.5.0
 SQLAlchemy==2.0.41
 passlib==1.7.4
+h11==0.16.0
+httpcore==1.0.9
+httpx==0.28.1
 aiomysql==0.2.0
 python-multipart==0.0.20
+
