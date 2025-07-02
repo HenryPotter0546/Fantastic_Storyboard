@@ -2,7 +2,7 @@ import os
 import time
 import logging
 import torch
-from diffusers import StableDiffusionPipeline, DPMSolverMultistepScheduler, StableDiffusionXLPipeline
+from diffusers import StableDiffusionPipeline, DPMSolverMultistepScheduler, StableDiffusionXLPipeline, KolorsPipeline
 from PIL import Image
 import base64
 import io
@@ -162,7 +162,7 @@ class LocalDiffusionService:
                         use_safetensors=use_safetensors,
                         local_files_only=False  # 允许下载必要的文件
                     )
-            else:
+            elif model_type.lower() == 'sd':
                 # 加载标准SD模型
                 if single_files:
                     logger.info(f"加载SD单文件模型: {model_path}")
@@ -184,6 +184,12 @@ class LocalDiffusionService:
                         use_safetensors=use_safetensors,
                         local_files_only=False  # 允许下载必要的文件
                     )
+
+            elif model_type.lower() == 'kolors':
+                self.pipeline = KolorsPipeline.from_pretrained(
+                    model_path, 
+                    torch_dtype=torch.float16, 
+                )
 
             # 使用更快的scheduler
             self.pipeline.scheduler = DPMSolverMultistepScheduler.from_config(

@@ -20,6 +20,7 @@ from datetime import timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import Depends, status  
 from service.database import get_db
+import functools
 
 # 配置日志
 logging.basicConfig(level=logging.INFO)
@@ -259,14 +260,9 @@ async def generate_scenes(
         logger.info(f"开始处理请求, 参数: num_scenes={num_scenes}, steps={steps}, guidance={guidance}")
         logger.info(f"开始处理请求，会话ID: {session_id}")
 
-        # 创建一个临时目录来存放生成的图片
         temp_dir = os.path.join("temp", session_id)
-        if not os.path.exists(temp_dir):
-            os.makedirs(temp_dir)
-
+        os.makedirs(temp_dir, exist_ok=True)
         image_paths = []
-        # 初始化服务
-        logger.info("初始化服务...")
         deepseek = DeepSeekService()
 
         # 检查是否已设置模型
@@ -291,102 +287,83 @@ async def generate_scenes(
 
         # 分割场景（得到中文描述）
         yield f"data: {json.dumps({'type': 'info', 'message': '正在构思故事情节和分镜...'})}\n\n"
-        logger.info("开始分割场景")
-
-        scenes_cn = await deepseek.split_into_scenes_cn(text, num_scenes)
-        # scenes_cn = await deepseek.process_novel_to_scenes(text, num_scenes)
         
-        logger.info(f"场景分割完成，共 {len(scenes_cn)} 个场景")
+        # 【核心修改】明确使用 process_novel_to_scenes
+        scenes_data = await deepseek.process_novel_to_scenes(text, num_scenes)
         
-        # 发送场景信息，包含session_id
-        yield f"data: {json.dumps({'type': 'start', 'total_scenes': len(scenes_cn), 'scenes': scenes_cn, 'session_id': session_id})}\n\n"
+        # --- 3. 【核心修改】适配前端协议 ---
+        # 提取纯中文字符串列表，以匹配前端在 'start' 事件中对 data.scenes 的期望
+        chinese_descriptions_list = [scene.get("chinese_description", "") for scene in scenes_data]
+        logger.info(f"场景分割完成，共 {len(scenes_data)} 个场景")
+        
+        # 发送 'start' 事件，其数据结构与你同事版本的前端期望完全一致
+        yield f"data: {json.dumps({'type': 'start', 'total_scenes': len(scenes_data), 'scenes': chinese_descriptions_list, 'session_id': session_id})}\n\n"
 
-        # 为每个场景生成图片
+        # --- 4. 逐个生成图片 ---
         logger.info("开始生成图片...")
-        for i, scene_cn in enumerate(scenes_cn):
-            logger.info(f"处理第 {i+1}/{len(scenes_cn)} 个场景")
+        for i, scene_info in enumerate(scenes_data):
+            logger.info(f"处理第 {i+1}/{len(scenes_data)} 个场景")
             try:
+                chinese_description = scene_info.get("chinese_description", "（无描述）")
+                english_prompt = scene_info.get("english_prompt", "")
+
+                if not english_prompt:
+                    logger.warning(f"场景 {i+1} 没有有效的英文提示词，已跳过。")
+                    yield f"data: {json.dumps({'type': 'scene_error', 'index': i, 'message': 'AI未能生成有效的绘图指令。'})}\n\n"
+                    continue
+
+                # 不再需要翻译，直接使用
+                prompt_for_drawing = f"comic style, {english_prompt}, detailed, high quality"
+                logger.info(f"生成提示词: {prompt_for_drawing}")
+
                 queue = asyncio.Queue()
-
                 def progress_callback(step, timestep, latents):
-                    try:
-                        queue.put_nowait({
-                            "type": "progress", "index": i, "step": step + 1, "total_steps": steps
-                        })
-                    except asyncio.QueueFull:
-                        pass
-
-                # 将中文场景描述翻译成英文prompt
-                english_prompt = await deepseek.translate_to_english(scene_cn)
-                logger.info(f"场景翻译完成: {english_prompt}")
-
-                # 构建适合本地diffusion的英文提示词
-                prompt = f"comic style, {english_prompt}, detailed, high quality"
-                logger.info(f"生成提示词: {prompt}")
-
-                # 启动图像生成任务
+                    try: queue.put_nowait({ "type": "progress", "index": i, "step": step + 1, "total_steps": steps })
+                    except asyncio.QueueFull: pass
+                
                 loop = asyncio.get_event_loop()
-                executor = loop.run_in_executor
-                gen_task = executor(
-                    None,
+                
+                # 【重要】使用 functools.partial 来正确调用 run_in_executor
+                target_for_executor = functools.partial(
                     diffusion_service.generate_image_with_style,
-                    prompt, "comic", steps, guidance, width, height, progress_callback
+                    prompt=prompt_for_drawing, style="comic",
+                    steps=steps, guidance_scale=guidance, 
+                    width=width, height=height, callback=progress_callback
                 )
+                gen_task = loop.run_in_executor(None, target_for_executor)
 
-                # 同时监听进度队列
                 done = False
                 while not done:
-                    try:
-                        # 等待队列消息或生成任务完成
-                        progress_task = asyncio.create_task(queue.get())
-                        finished, pending = await asyncio.wait(
-                            [gen_task, progress_task],
-                            return_when=asyncio.FIRST_COMPLETED
-                        )
+                    progress_task = asyncio.create_task(queue.get())
+                    finished, pending = await asyncio.wait([gen_task, progress_task], return_when=asyncio.FIRST_COMPLETED)
 
-                        if progress_task in finished:
-                            progress_data = progress_task.result()
-                            yield f"data: {json.dumps(progress_data)}\n\n"
+                    if progress_task in finished:
+                        yield f"data: {json.dumps(progress_task.result())}\n\n"
 
-                        if gen_task in finished:
-                            image_url = gen_task.result()
-                            # 确保所有剩余的进度消息都被处理
-                            while not queue.empty():
-                                progress_data = queue.get_nowait()
-                                yield f"data: {json.dumps(progress_data)}\n\n"
-
-                            logger.info(f"图片生成完成")
-
-                            # 保存图片到临时目录
-                            image_data = base64.b64decode(image_url.split(',')[1])
-                            image_path = os.path.join(temp_dir, f"scene_{i+1}.png")
-                            with open(image_path, "wb") as f:
-                                f.write(image_data)
-                            image_paths.append(image_path)
-
-                            # 只发送中文描述
-                            yield f"data: {json.dumps({'type': 'scene', 'index': i, 'description': scene_cn, 'image_url': image_url})}\n\n"
-                            done = True
-                            # 取消可能仍在等待的progress_task
-                            if not progress_task.done():
-                                progress_task.cancel()
-
-                    except Exception as task_e:
-                        logger.error(f"任务执行中发生错误: {task_e}")
+                    if gen_task in finished:
+                        image_url = gen_task.result()
+                        while not queue.empty():
+                            yield f"data: {json.dumps(queue.get_nowait())}\n\n"
+                        
+                        logger.info("图片生成完成")
+                        
+                        image_data = base64.b64decode(image_url.split(',')[1])
+                        image_path = os.path.join(temp_dir, f"scene_{i+1}.png")
+                        with open(image_path, "wb") as f: f.write(image_data)
+                        image_paths.append(image_path)
+                        
+                        # 发送 'scene' 事件，数据结构与你同事版本前端期望一致
+                        yield f"data: {json.dumps({'type': 'scene', 'index': i, 'description': chinese_description, 'image_url': image_url})}\n\n"
                         done = True
-                        if 'progress_task' in locals() and not progress_task.done():
-                            progress_task.cancel()
-                        raise task_e
-
+                        if not progress_task.done(): progress_task.cancel()
+                                
             except Exception as e:
-                error_msg = f"场景 {i+1} 生成失败: {str(e)}"
+                error_msg = f"场景 {i+1} 生成失败: {str(e)}\n{traceback.format_exc()}"
                 logger.error(error_msg)
-                yield f"data: {json.dumps({'type': 'scene_error', 'index': i, 'message': error_msg})}\n\n"
+                yield f"data: {json.dumps({'type': 'scene_error', 'index': i, 'message': str(e)})}\n\n"
 
-        # 发送图片生成完成的消息，并包含会话ID
+        # --- 5. 结束信号 (保持不变) ---
         yield f"data: {json.dumps({'type': 'all_images_generated', 'session_id': session_id})}\n\n"
-
-        # 最新积分信息
         yield f"data: {json.dumps({'type': 'complete', 'new_credit_balance': current_user.credits})}\n\n"
             
     except Exception as e:
