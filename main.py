@@ -18,10 +18,12 @@ from service import datamodels, auth, schemas
 from fastapi.security import OAuth2PasswordRequestForm
 from datetime import timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
-from fastapi import Depends, status  
+from fastapi import Depends, status
 from service.database import get_db
+
 import functools
 from fastapi import Query
+
 # 配置日志
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -34,8 +36,9 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 diffusion_service = LocalDiffusionService()
 
 # 全局变量用于控制重新生成
-regeneration_active = False
 current_generation_task = None
+pending_regeneration_request = None  # 新增：存储待处理的重新生成请求
+
 
 class NovelRequest(BaseModel):
     text: str
@@ -50,6 +53,7 @@ class LoadLoraRequest(BaseModel):
 
 class SetLoraScaleRequest(BaseModel):
     scale: float
+
 # --- 登录端点 ---
 @app.post("/token", response_model=schemas.Token)
 async def login_for_access_token(db: AsyncSession = Depends(get_db), form_data: OAuth2PasswordRequestForm = Depends()):
@@ -66,6 +70,7 @@ async def login_for_access_token(db: AsyncSession = Depends(get_db), form_data: 
     )
     return {"access_token": access_token, "token_type": "bearer"}
 
+
 # --- 注册端点 ---
 @app.post("/users/register", response_model=schemas.User)
 async def register_user(user: schemas.UserCreate, db: AsyncSession = Depends(get_db)):
@@ -73,38 +78,42 @@ async def register_user(user: schemas.UserCreate, db: AsyncSession = Depends(get
     处理用户注册请求。
     FastAPI 会自动处理 Depends(get_db)，将一个可用的数据库会话 (AsyncSession) 赋值给 db 参数。
     """
-    
+
     # 1. 检查用户名是否已存在。将【正确的 db 对象】传递给 auth.get_user
     db_user = await auth.get_user(db, username=user.username)
     if db_user:
         raise HTTPException(status_code=400, detail="Username already registered")
-    
+
     # 2. 创建新用户
     hashed_password = auth.get_password_hash(user.password)
     # 注意：这里应该是 datamodels.User，因为你的模型文件是 datamodels.py
     new_user = datamodels.User(username=user.username, hashed_password=hashed_password)
-    
+
     # 3. 使用【正确的 db 对象】进行数据库操作
     db.add(new_user)
     await db.commit()
     await db.refresh(new_user)
-    
+
     return new_user
+
 
 # --- 获取当前用户信息端点 (受保护) ---
 @app.get("/users/me", response_model=schemas.User)
 async def read_users_me(current_user: datamodels.User = Depends(auth.get_current_user)):
     return current_user
 
+
 # 强制登录页面
 @app.get("/", response_class=HTMLResponse)
 async def read_login_page():
     return FileResponse("templates/login.html")
 
+
 # 登录后的主应用页面
 @app.get("/index", response_class=HTMLResponse)
 async def read_main_app():
     return FileResponse("templates/index.html")
+
 
 # 为了登录页面的 js 也能访问，修改 login 路由
 @app.get("/login", response_class=HTMLResponse)
@@ -307,7 +316,7 @@ async def novel_to_comic_stream(
                 "message": f"积分不足。需要 {required_credits} 积分，但您只有 {current_user.credits}。"
             }
             yield f"data: {json.dumps(error_data)}\n\n"
-        
+
         return StreamingResponse(insufficient_credits_stream(), media_type="text/event-stream")
 
     # 在生成开始前扣除积分
@@ -338,9 +347,11 @@ async def generate_scenes(
     guidance: float,
     width: int,
     height: int,
-    db: AsyncSession,          
+    db: AsyncSession,
     current_user: datamodels.User,
 ):
+    global current_generation_task, pending_regeneration_request
+
     logger.info(f"User {current_user.username} starting generation. Credits left: {current_user.credits}")
     session_id = str(uuid.uuid4())
     try:
@@ -352,7 +363,9 @@ async def generate_scenes(
         image_paths = []
         deepseek = DeepSeekService()
 
+
         # 确保模型已经加载
+
         if diffusion_service.model_name is None:
             error_msg = "请先选择并加载模型"
             logger.error(error_msg)
@@ -373,10 +386,19 @@ async def generate_scenes(
 
         # 分割场景（得到中文描述）
         yield f"data: {json.dumps({'type': 'info', 'message': '正在构思故事情节和分镜...'})}\n\n"
-        
+
+
+
+        # 【核心修改】明确使用 process_novel_to_scenes
         scenes_data = await deepseek.process_novel_to_scenes(text, num_scenes)
+
+
+        # --- 3. 【核心修改】适配前端协议 ---
+        # 提取纯中文字符串列表，以匹配前端在 'start' 事件中对 data.scenes 的期望
         chinese_descriptions_list = [scene.get("chinese_description", "") for scene in scenes_data]
         logger.info(f"场景分割完成，共 {len(scenes_data)} 个场景")
+
+        # 发送 'start' 事件，其数据结构与你同事版本的前端期望完全一致
 
         yield f"data: {json.dumps({'type': 'start', 'total_scenes': len(scenes_data), 'scenes': chinese_descriptions_list, 'session_id': session_id})}\n\n"
 
@@ -397,7 +419,7 @@ async def generate_scenes(
         # --- 生成图片 ---
         logger.info("开始生成图片...")
         for i, scene_info in enumerate(scenes_data):
-            logger.info(f"处理第 {i+1}/{len(scenes_data)} 个场景")
+            logger.info(f"处理第 {i + 1}/{len(scenes_data)} 个场景")
             try:
                 chinese_description = scene_info.get("chinese_description", "（无描述）")
                 english_prompt = scene_info.get("english_prompt", "")
@@ -412,24 +434,33 @@ async def generate_scenes(
                 logger.info(f"生成提示词: {prompt_for_drawing}")
 
                 queue = asyncio.Queue()
+
                 def progress_callback(step, timestep, latents):
-                    try: queue.put_nowait({ "type": "progress", "index": i, "step": step + 1, "total_steps": steps })
-                    except asyncio.QueueFull: pass
-                
+                    try:
+                        queue.put_nowait({"type": "progress", "index": i, "step": step + 1, "total_steps": steps})
+                    except asyncio.QueueFull:
+                        pass
+
+
+
                 loop = asyncio.get_event_loop()
+
                 import functools
+
                 target_for_executor = functools.partial(
                     diffusion_service.generate_image_with_style,
                     prompt=prompt_for_drawing, style="comic",
-                    steps=steps, guidance_scale=guidance, 
+                    steps=steps, guidance_scale=guidance,
                     width=width, height=height, callback=progress_callback
                 )
                 gen_task = loop.run_in_executor(None, target_for_executor)
+                current_generation_task = gen_task  # 【修改1】记录当前任务
 
                 done = False
                 while not done:
                     progress_task = asyncio.create_task(queue.get())
-                    finished, pending = await asyncio.wait([gen_task, progress_task], return_when=asyncio.FIRST_COMPLETED)
+                    finished, pending = await asyncio.wait([gen_task, progress_task],
+                                                           return_when=asyncio.FIRST_COMPLETED)
 
                     if progress_task in finished:
                         yield f"data: {json.dumps(progress_task.result())}\n\n"
@@ -438,20 +469,34 @@ async def generate_scenes(
                         image_url = gen_task.result()
                         while not queue.empty():
                             yield f"data: {json.dumps(queue.get_nowait())}\n\n"
-                        
+
                         logger.info("图片生成完成")
-                        
+
                         image_data = base64.b64decode(image_url.split(',')[1])
-                        image_path = os.path.join(temp_dir, f"scene_{i+1}.png")
-                        with open(image_path, "wb") as f: f.write(image_data)
+                        image_path = os.path.join(temp_dir, f"scene_{i + 1}.png")
+                        with open(image_path, "wb") as f:
+                            f.write(image_data)
                         image_paths.append(image_path)
+
                         
+
+
+                        # 发送 'scene' 事件，数据结构与你同事版本前端期望一致
+
                         yield f"data: {json.dumps({'type': 'scene', 'index': i, 'description': chinese_description, 'image_url': image_url})}\n\n"
                         done = True
                         if not progress_task.done(): progress_task.cancel()
-                                
+
+                        current_generation_task = None  # 【修改2】清空当前任务记录
+
+                        # 【修改3】检查是否有待处理的重新生成请求
+                        if pending_regeneration_request:
+                            logger.info("检测到待处理的重新生成请求，当前图片已完成，即将处理重新生成...")
+                            break  # 跳出循环，停止后续图片生成
+
             except Exception as e:
-                error_msg = f"场景 {i+1} 生成失败: {str(e)}\n{traceback.format_exc()}"
+                current_generation_task = None  # 【修改4】异常时也要清空任务记录
+                error_msg = f"场景 {i + 1} 生成失败: {str(e)}\n{traceback.format_exc()}"
                 logger.error(error_msg)
                 yield f"data: {json.dumps({'type': 'scene_error', 'index': i, 'message': str(e)})}\n\n"
 
@@ -459,20 +504,56 @@ async def generate_scenes(
         yield f"data: {json.dumps({'type': 'complete', 'new_credit_balance': current_user.credits})}\n\n"
 
     except Exception as e:
+        current_generation_task = None  # 【修改5】异常时清空任务记录
         error_msg = f"错误: {str(e)}\n{traceback.format_exc()}"
         logger.error(error_msg)
         yield f"data: {json.dumps({'type': 'error', 'message': error_msg})}\n\n"
 
+
+@app.post("/save-scene-descriptions")
+async def save_scene_descriptions(request: dict):
+    """保存场景描述到txt文件"""
+    try:
+        session_id = request.get("session_id")
+        descriptions = request.get("descriptions")
+
+        if not session_id or not descriptions:
+            raise HTTPException(status_code=400, detail="Missing session_id or descriptions")
+
+        # 确保temptxt目录存在
+        temp_txt_dir = "temptxt"
+        if not os.path.exists(temp_txt_dir):
+            os.makedirs(temp_txt_dir)
+
+        # 生成txt文件内容
+        txt_content = ""
+        for i, description in enumerate(descriptions):
+            if description:  # 只保存非空描述
+                txt_content += f"场景{i + 1}：{description}\n"
+
+        # 保存到文件
+        txt_file_path = os.path.join(temp_txt_dir, f"{session_id}.txt")
+        with open(txt_file_path, 'w', encoding='utf-8') as f:
+            f.write(txt_content)
+
+        logger.info(f"场景描述已保存到: {txt_file_path}")
+        return {"success": True, "message": "场景描述保存成功"}
+
+    except Exception as e:
+        logger.error(f"保存场景描述失败: {str(e)}")
+        return {"success": False, "message": str(e)}
+
 @app.post("/regenerate-image")
 async def regenerate_image(request: dict):
-    global regeneration_active, current_generation_task
+    global current_generation_task, pending_regeneration_request
 
     try:
         description = request.get("description")
         scene_index = request.get("sceneIndex")
-        steps = request.get("steps", 30)  # 新增：从请求中获取steps参数，默认为30
+        steps = request.get("steps", 30)
+        session_id = request.get("session_id")  # 新增：获取session_id
 
-        logger.info(f"收到重新生成图片请求: scene_index={scene_index}, description={description}, steps={steps}")
+        logger.info(f"收到重新生成图片请求: scene_index={scene_index}, description={description}, steps={steps}, session_id={session_id}")
 
         if scene_index is None or description is None:
             raise HTTPException(status_code=400, detail="Missing description or scene_index parameter")
@@ -491,13 +572,24 @@ async def regenerate_image(request: dict):
                 "message": "模型未加载，请先加载模型"
             }
 
-        # 设置重新生成标志，暂停当前生成任务
-        regeneration_active = True
-
-        # 如果有正在进行的生成任务，等待其暂停
+        # 【修改6】检查是否有正在进行的生成任务
         if current_generation_task and not current_generation_task.done():
-            logger.info("等待当前生成任务暂停...")
-            await asyncio.sleep(1)
+            logger.info("检测到正在进行的图片生成任务，将在当前图片完成后进行重新生成...")
+            # 存储重新生成请求，等待当前任务完成
+            pending_regeneration_request = {
+                "description": description,
+                "scene_index": scene_index,
+                "steps": steps,
+                "session_id": session_id  # 新增：存储session_id
+            }
+
+            # 等待当前任务完成
+            logger.info("等待当前生成任务完成...")
+            await current_generation_task
+            logger.info("当前生成任务已完成，开始处理重新生成请求")
+
+            # 清空待处理请求标记
+            pending_regeneration_request = None
 
         try:
             # 初始化服务
@@ -525,6 +617,24 @@ async def regenerate_image(request: dict):
                 512  # height
             )
 
+            # 新增：如果提供了session_id，则保存图片到对应目录
+            if session_id:
+                try:
+                    temp_dir = os.path.join("temp", session_id)
+                    if os.path.exists(temp_dir):
+                        # 解码base64图片数据
+                        image_data = base64.b64decode(image_url.split(',')[1])
+                        # 覆盖原有图片文件
+                        image_path = os.path.join(temp_dir, f"scene_{scene_index + 1}.png")
+                        with open(image_path, "wb") as f:
+                            f.write(image_data)
+                        logger.info(f"重新生成的图片已保存并覆盖: {image_path}")
+                    else:
+                        logger.warning(f"临时目录不存在: {temp_dir}")
+                except Exception as save_error:
+                    logger.error(f"保存重新生成的图片失败: {str(save_error)}")
+                    # 不影响主要流程，继续返回结果
+
             logger.info("重新生成图片完成")
 
             return {
@@ -538,18 +648,13 @@ async def regenerate_image(request: dict):
                 "success": False,
                 "message": f"重新生成失败: {str(e)}"
             }
-        finally:
-            # 重新生成完成，恢复正常生成
-            regeneration_active = False
 
     except Exception as e:
-        regeneration_active = False
         logger.error(f"重新生成图片请求处理失败: {str(e)}")
         return {
             "success": False,
             "message": str(e)
         }
-
 
 @app.get("/video", response_class=HTMLResponse)
 async def get_video_page():
@@ -589,6 +694,12 @@ async def create_video(request: dict):
         shutil.rmtree(temp_dir)
         logger.info(f"已清理临时目录: {temp_dir}")
 
+        # 注意：不删除txt文件，保留用于后续查看
+        # txt文件路径: temptxt/{session_id}.txt
+        txt_file_path = os.path.join("temptxt", f"{session_id}.txt")
+        if os.path.exists(txt_file_path):
+            logger.info(f"场景描述文件保留在: {txt_file_path}")
+
         return {"success": True, "video_url": f"/static/videos/{session_id}.mp4"}
 
     except Exception as e:
@@ -597,7 +708,7 @@ async def create_video(request: dict):
         logger.error(f"详细错误信息: {traceback.format_exc()}")
         return {"success": False, "message": str(e)}
 
-
 if __name__ == "__main__":
     logger.info("启动服务器...")
     uvicorn.run(app, host="localhost", port=8080)
+

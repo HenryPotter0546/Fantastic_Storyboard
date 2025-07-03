@@ -4,19 +4,21 @@ from dotenv import load_dotenv
 
 import json
 
-
 load_dotenv()
 
 
 class DeepSeekService:
     def __init__(self):
-        self.api_key = os.getenv('DEEPSEEK_API_KEY')
+        self.api_key = os.getenv('SILICONFLOW_API_KEY')
         if not self.api_key:
-            raise ValueError("未设置 DEEPSEEK_API_KEY 环境变量")
+            raise ValueError("未设置 SILICONFLOW_API_KEY 环境变量")
 
-        self.api_url = "https://api.deepseek.com/v1/chat/completions"
+
+        self.api_url = "https://api.siliconflow.cn/v1/chat/completions"
+
         # 创建一个可复用的异步客户端实例
         self.client = httpx.AsyncClient(timeout=60.0)
+
     async def translate_to_english(self, text: str) -> str:
         """将中文文本翻译成英文"""
         prompt = f"""请将以下中文文本翻译成英文，保持描述的准确性和艺术性。
@@ -25,7 +27,7 @@ class DeepSeekService:
         2. 保持描述的简洁性和准确性
         3. 确保翻译后的文本适合作为图片生成的提示词
 
-        中文文本：
+        中文文本：   
         {text}
         """
 
@@ -35,7 +37,7 @@ class DeepSeekService:
         }
 
         data = {
-            "model": "deepseek-chat",
+            "model": "Qwen/QwQ-32B",
             "messages": [
                 {
                     "role": "system",
@@ -65,10 +67,11 @@ class DeepSeekService:
             return translated_text
 
         except httpx.RequestError as e:
-            raise Exception(f"调用DeepSeek API翻译失败: {str(e)}")
+
+            raise Exception(f"调用SiliconFlow API翻译失败: {str(e)}")
+
         except (KeyError, IndexError) as e:
             raise Exception(f"解析API响应失败: {str(e)}")
-        
 
     async def convert_to_image_prompt(self, english_text: str) -> str:
         """将英文文本转换为适合模型生成图片的语句段"""
@@ -104,7 +107,7 @@ class DeepSeekService:
         }
 
         data = {
-            "model": "deepseek-chat",
+            "model": "Qwen/QwQ-32B",
             "messages": [
                 {
                     "role": "system",
@@ -157,11 +160,13 @@ class DeepSeekService:
                 error_detail = response.json()
             except:
                 error_detail = response.text
-            raise Exception(f"调用DeepSeek API失败: {str(e)}\n错误详情: {error_detail}")
+            raise Exception(f"调用SiliconFlow API失败: {str(e)}\n错误详情: {error_detail}")
         except (KeyError, IndexError) as e:
             raise Exception(f"解析API响应失败: {str(e)}")
 
+
     async def split_into_scenes(self, novel_text, num_scenes=10):
+
         """将小说文本分割成场景描述"""
         prompt = f"""作为一个为小说配图的工作者，请将以下小说文本分割成{num_scenes}个场景，每个场景用一段简短的描述概括，适合用于生成漫画分镜。
 
@@ -195,7 +200,7 @@ class DeepSeekService:
         }
 
         data = {
-            "model": "deepseek-chat",
+            "model": "Qwen/QwQ-32B",
             "messages": [
                 {
                     "role": "system",
@@ -239,12 +244,13 @@ class DeepSeekService:
             return [scene.strip() for scene in scenes if scene.strip()]
 
         except httpx.RequestError as e:
+
             error_detail = ""
             try:
                 error_detail = response.json()
             except:
                 error_detail = response.text
-            raise Exception(f"调用DeepSeek API失败: {str(e)}\n错误详情: {error_detail}")
+            raise Exception(f"调用SiliconFlow API失败: {str(e)}\n错误详情: {error_detail}")
         except (KeyError, IndexError) as e:
             raise Exception(f"解析API响应失败: {str(e)}")
 
@@ -261,7 +267,7 @@ class DeepSeekService:
             "Content-Type": "application/json"
         }
         data = {
-            "model": "deepseek-chat",
+            "model": "Qwen/QwQ-32B",
             "messages": [
                 {
                     "role": "system",
@@ -290,10 +296,10 @@ class DeepSeekService:
                 error_detail = response.json()
             except:
                 error_detail = response.text
-            raise Exception(f"调用DeepSeek API失败: {str(e)}\n错误详情: {error_detail}")
+            raise Exception(f"调用SiliconFlow API失败: {str(e)}\n错误详情: {error_detail}")
         except (KeyError, IndexError) as e:
             raise Exception(f"解析API响应失败: {str(e)}")
-        
+
     async def process_novel_to_scenes(self, novel_text: str, num_scenes: int = 10) -> list[dict]:
         """
         一次性将小说文本处理成场景。
@@ -330,7 +336,7 @@ class DeepSeekService:
         }
 
         data = {
-            "model": "deepseek-chat",
+            "model": "Qwen/QwQ-32B",
             "messages": [
                 {
                     "role": "system",
@@ -342,20 +348,20 @@ class DeepSeekService:
                 }
             ],
             "temperature": 0.6,
-            "max_tokens": 3000 
+            "max_tokens": 3000
         }
 
         raw_content = ""
         try:
             response = await self.client.post(self.api_url, headers=headers, json=data)
             response.raise_for_status()
-            
+
             result = response.json()
             if 'choices' not in result or not result['choices']:
                 raise Exception("API返回的数据格式不正确")
-                
+
             raw_content = result['choices'][0]['message']['content']
-            
+
             # 更健壮的 JSON 提取方式
             json_str = raw_content
             if '```json' in json_str:
@@ -365,7 +371,7 @@ class DeepSeekService:
 
             # 解析 JSON 字符串
             scenes_data = json.loads(json_str)
-            
+
             if not isinstance(scenes_data, list):
                 raise ValueError("AI 没有返回有效的 JSON 数组")
 
@@ -373,7 +379,7 @@ class DeepSeekService:
 
         except httpx.RequestError as e:
             error_detail = response.text if 'response' in locals() else str(e)
-            raise Exception(f"调用DeepSeek API失败: {str(e)}\n错误详情: {error_detail}")
+            raise Exception(f"调用SiliconFlow API失败: {str(e)}\n错误详情: {error_detail}")
         except (json.JSONDecodeError, ValueError) as e:
             raise Exception(f"解析返回的JSON失败: {e}\n原始返回内容: {raw_content}")
         except Exception as e:
