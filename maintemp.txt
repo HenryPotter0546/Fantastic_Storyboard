@@ -20,16 +20,29 @@ from datetime import timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import Depends, status  
 from service.database import get_db
-import functools
-from fastapi import Query
+from service.task_queue import TaskQueue
+from fastapi import FastAPI
+from contextlib import asynccontextmanager
+from fastapi import FastAPI
+import asyncio
+from pydantic import BaseModel
+from collections import defaultdict
+
+task_data_queues = defaultdict(asyncio.Queue)
 # 配置日志
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
+class GenerationTaskRequest(BaseModel):
+    text: str
+    num_scenes: int = 10
+    steps: int = 30
+    guidance: float = 7.5
+    width: int = 512
+    height: int = 512
 app = FastAPI(title="小说转漫画API")
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
-
+task_queue = TaskQueue(max_concurrent_tasks=1)
 # 创建全局的diffusion服务实例
 diffusion_service = LocalDiffusionService()
 
@@ -45,11 +58,17 @@ class NovelRequest(BaseModel):
 class SceneResponse(BaseModel):
     description: str
     image_url: str
-class LoadLoraRequest(BaseModel):
-    lora_name: str
+task_queue = TaskQueue(max_concurrent_tasks=1)
 
-class SetLoraScaleRequest(BaseModel):
-    scale: float
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # 应用启动前执行：启动worker
+    asyncio.create_task(task_queue.worker())
+    yield
+    # 应用关闭后执行：可释放资源，如果需要
+    # 例如 task_queue.cleanup() 或其它清理逻辑
+
+app = FastAPI(lifespan=lifespan)
 # --- 登录端点 ---
 @app.post("/token", response_model=schemas.Token)
 async def login_for_access_token(db: AsyncSession = Depends(get_db), form_data: OAuth2PasswordRequestForm = Depends()):
@@ -116,91 +135,7 @@ async def read_login_page_again():
 async def pic_page():
     return FileResponse("templates/pic.html")
 
-from fastapi import Request
 
-# ... 你已有代码 ...
-@app.get("/available-loras")
-async def available_loras():
-    try:
-        loras = diffusion_service.get_available_loras()
-        return {"loras": loras}
-    except Exception as e:
-        logger.error(f"获取LoRA列表失败: {str(e)}")
-        return {"loras": [], "error": str(e)}
-    
-class SetLoraRequest(BaseModel):
-    lora_name: str
-    scale: float = 1.0
-
-@app.post("/set-lora")
-async def set_lora(request: SetLoraRequest):
-    try:
-        diffusion_service.load_lora_weights(request.lora_name, request.scale)
-        lora_info = next((l for l in diffusion_service.get_available_loras() if l['name'] == request.lora_name), None)
-        prompt = lora_info.get('prompt', '') if lora_info else ''
-        return {
-            "success": True,
-            "message": f"LoRA {request.lora_name} 加载成功，权重scale={request.scale}",
-            "prompt": prompt
-        }
-    except Exception as e:
-        logger.error(f"设置LoRA失败: {str(e)}")
-        return {"success": False, "message": str(e)}
-@app.post("/unload-lora")
-async def unload_lora():
-    try:
-        diffusion_service.unload_lora_weights()
-        return {"success": True, "message": "LoRA权重已卸载"}
-    except Exception as e:
-        logger.error(f"卸载LoRA失败: {str(e)}")
-        return {"success": False, "message": str(e)}
-
-@app.get("/lora-status")
-async def lora_status():
-    return {
-        "loaded": diffusion_service.lora_weights_loaded,
-        "name": None,
-        "path": diffusion_service.lora_weights_path,
-        "scale": getattr(diffusion_service, "lora_scale", 1.0)
-    }
-
-@app.post("/load-lora")
-async def load_lora(request: LoadLoraRequest):
-    """
-    只加载LoRA权重，不调整scale，默认1.0
-    """
-    try:
-        diffusion_service.load_lora_weights(request.lora_name)
-        return {"success": True, "message": f"LoRA {request.lora_name} 权重加载成功，scale为默认1.0"}
-    except Exception as e:
-        return {"success": False, "message": str(e)}
-
-@app.post("/set-lora-scale")
-async def set_lora_scale(request: SetLoraScaleRequest):
-    """
-    仅调整已加载LoRA的权重scale，无需重新加载权重
-    """
-    try:
-        diffusion_service.set_lora_scale(request.scale)
-        return {"success": True, "message": f"LoRA权重scale调整为 {request.scale}"}
-    except Exception as e:
-        return {"success": False, "message": str(e)}
-
-
-@app.post("/unload-lora")
-async def unload_lora():
-    try:
-        diffusion_service.unload_lora_weights()
-        return {"success": True, "message": "LoRA权重已卸载"}
-    except Exception as e:
-        return {"success": False, "message": f"卸载LoRA失败: {str(e)}"}
-
-@app.get("/lora-status")
-async def lora_status():
-    return {
-        "loaded": diffusion_service.lora_weights_loaded,
-        "path": diffusion_service.lora_weights_path
-    }
 @app.get("/available-models")
 async def get_available_models():
     """获取可用的模型列表"""
@@ -279,58 +214,58 @@ async def get_model_status():
         return {"is_loaded": False, "current_model": None, "message": str(e)}
 
 
-@app.get("/novel-to-comic-stream")
-async def novel_to_comic_stream(
-    text: str,
-    num_scenes: int = 10,
-    steps: int = 30,
-    guidance: float = 7.5,
-    width: int = 512,
-    height: int = 512,
-    db: AsyncSession = Depends(get_db),
-    current_user: datamodels.User = Depends(auth.get_current_user) # 保护该端点
-):
-    """
-    处理小说到漫画的流式生成请求。
-    1. 验证用户身份。
-    2. 检查并扣除积分。
-    3. 调用核心生成器函数。
-    """
-    # 计算所需积分
-    required_credits = num_scenes * 100
-    if current_user.credits < required_credits:
-        # 这里不能直接 raise HTTPException，因为前端期望的是流式响应。
-        # 我们需要通过流发送一个错误消息。
-        async def insufficient_credits_stream():
-            error_data = {
-                "type": "error",
-                "message": f"积分不足。需要 {required_credits} 积分，但您只有 {current_user.credits}。"
-            }
-            yield f"data: {json.dumps(error_data)}\n\n"
-        
-        return StreamingResponse(insufficient_credits_stream(), media_type="text/event-stream")
+class GenerationTaskRequest(BaseModel):
+    text: str
+    num_scenes: int = 10
+    steps: int = 30
+    guidance: float = 7.5
+    width: int = 512
+    height: int = 512
 
-    # 在生成开始前扣除积分
+@app.post("/submit-generation-task")
+async def submit_generation_task(
+    request: GenerationTaskRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: datamodels.User = Depends(auth.get_current_user)
+):
+    # 积分校验同之前
+    required_credits = request.num_scenes * 100
+    if current_user.credits < required_credits:
+        return {"success": False, "message": f"积分不足。需要 {required_credits} 积分，但您只有 {current_user.credits}。"}
+
     current_user.credits -= required_credits
     db.add(current_user)
     await db.commit()
-    await db.refresh(current_user) # 刷新以获取数据库中的最新状态
+    await db.refresh(current_user)
 
-    # 调用独立的生成器函数，并将所有必要的参数传递给它
-    return StreamingResponse(
-        generate_scenes(
-            text=text,
-            num_scenes=num_scenes,
-            steps=steps,
-            guidance=guidance,
-            width=width,
-            height=height,
-            db=db, # 传递 db 会话
-            current_user=current_user # 传递当前用户对象
-        ),
-        media_type="text/event-stream"
-    )
+    task_id = str(uuid.uuid4())
+    task_data_queues[task_id] = asyncio.Queue()
 
+    async def run_generation():
+        try:
+            async for event in generate_scenes(
+                text=request.text,
+                num_scenes=request.num_scenes,
+                steps=request.steps,
+                guidance=request.guidance,
+                width=request.width,
+                height=request.height,
+                db=db,
+                current_user=current_user
+            ):
+                # 放入事件队列
+                await task_data_queues[task_id].put(event)
+        except Exception as e:
+            # 发生异常时放入错误事件
+            await task_data_queues[task_id].put({"type": "error", "message": str(e)})
+        finally:
+            # 结束标志
+            await task_data_queues[task_id].put(None)
+
+    # 提交任务到队列执行
+    task_queue.submit_task(run_generation)  # 这是你的任务队列submit接口
+
+    return {"success": True, "task_id": task_id, "message": "任务已提交，排队等待资源使用"}
 async def generate_scenes(
     text: str,
     num_scenes: int,
@@ -342,23 +277,30 @@ async def generate_scenes(
     current_user: datamodels.User,
 ):
     logger.info(f"User {current_user.username} starting generation. Credits left: {current_user.credits}")
+
     session_id = str(uuid.uuid4())
     try:
         logger.info(f"开始处理请求, 参数: num_scenes={num_scenes}, steps={steps}, guidance={guidance}")
         logger.info(f"开始处理请求，会话ID: {session_id}")
 
+        # 创建一个临时目录来存放生成的图片
         temp_dir = os.path.join("temp", session_id)
-        os.makedirs(temp_dir, exist_ok=True)
+        if not os.path.exists(temp_dir):
+            os.makedirs(temp_dir)
+
         image_paths = []
+        # 初始化服务
+        logger.info("初始化服务...")
         deepseek = DeepSeekService()
 
-        # 确保模型已经加载
+        # 检查是否已设置模型
         if diffusion_service.model_name is None:
             error_msg = "请先选择并加载模型"
             logger.error(error_msg)
             yield f"data: {json.dumps({'type': 'error', 'message': error_msg})}\n\n"
             return
 
+        # 检查模型是否已加载，如果没有则自动加载
         if not diffusion_service.is_model_loaded():
             logger.info("模型未加载，开始自动加载...")
             yield f"data: {json.dumps({'type': 'info', 'message': f'模型 {diffusion_service.model_name} 未加载，正在自动加载中...'})}\n\n"
@@ -372,96 +314,118 @@ async def generate_scenes(
                 return
 
         # 分割场景（得到中文描述）
-        yield f"data: {json.dumps({'type': 'info', 'message': '正在构思故事情节和分镜...'})}\n\n"
+        logger.info("向前端发送""开始分割场景...")
+        yield f"data: {json.dumps({'type': 'info', 'message': '正在分割场景，这可能需要一些时间...'})}\n\n"
+        logger.info("开始分割场景")
+
+        loop = asyncio.get_event_loop()
+        # loop.run_in_executor 会将同步函数 deepseek.split_into_scenes_cn 
+        # 放到一个独立的线程池中执行，这样它就不会阻塞主事件循环了。
+        scenes_cn = await loop.run_in_executor(
+            None,  # 使用默认的线程池执行器
+            deepseek.split_into_scenes_cn,
+            text,
+            num_scenes
+        )
         
-        scenes_data = await deepseek.process_novel_to_scenes(text, num_scenes)
-        chinese_descriptions_list = [scene.get("chinese_description", "") for scene in scenes_data]
-        logger.info(f"场景分割完成，共 {len(scenes_data)} 个场景")
+        logger.info(f"场景分割完成，共 {len(scenes_cn)} 个场景")
+        
+        # 发送场景信息，包含session_id
+        yield f"data: {json.dumps({'type': 'start', 'total_scenes': len(scenes_cn), 'scenes': scenes_cn, 'session_id': session_id})}\n\n"
 
-        yield f"data: {json.dumps({'type': 'start', 'total_scenes': len(scenes_data), 'scenes': chinese_descriptions_list, 'session_id': session_id})}\n\n"
-
-        # --- 【新增部分】获取当前加载的LoRA prompt ---
-        current_lora_prompt = ""
-        if diffusion_service.lora_weights_loaded and diffusion_service.lora_weights_path:
-            loras = diffusion_service.get_available_loras()
-            # 兼容路径格式差异，使用 normpath
-            current_path_norm = os.path.normpath(diffusion_service.lora_weights_path)
-            for lora in loras:
-                if os.path.normpath(lora['path']) == current_path_norm:
-                    current_lora_prompt = lora.get('prompt', '')
-                    logger.info(f"检测到已加载LoRA: {lora['name']}，提示词: {current_lora_prompt}")
-                    break
-        else:
-            logger.info("未检测到已加载LoRA")
-
-        # --- 生成图片 ---
+        # 为每个场景生成图片
         logger.info("开始生成图片...")
-        for i, scene_info in enumerate(scenes_data):
-            logger.info(f"处理第 {i+1}/{len(scenes_data)} 个场景")
+        for i, scene_cn in enumerate(scenes_cn):
+            logger.info(f"处理第 {i+1}/{len(scenes_cn)} 个场景")
             try:
-                chinese_description = scene_info.get("chinese_description", "（无描述）")
-                english_prompt = scene_info.get("english_prompt", "")
-
-                if not english_prompt:
-                    logger.warning(f"场景 {i+1} 没有有效的英文提示词，已跳过。")
-                    yield f"data: {json.dumps({'type': 'scene_error', 'index': i, 'message': 'AI未能生成有效的绘图指令。'})}\n\n"
-                    continue
-
-                # 【核心修改】拼接LoRA提示词和原英文提示词
-                prompt_for_drawing = f" {current_lora_prompt}, {english_prompt}, detailed, high quality"
-                logger.info(f"生成提示词: {prompt_for_drawing}")
-
                 queue = asyncio.Queue()
-                def progress_callback(step, timestep, latents):
-                    try: queue.put_nowait({ "type": "progress", "index": i, "step": step + 1, "total_steps": steps })
-                    except asyncio.QueueFull: pass
-                
-                loop = asyncio.get_event_loop()
-                import functools
-                target_for_executor = functools.partial(
-                    diffusion_service.generate_image_with_style,
-                    prompt=prompt_for_drawing, style="comic",
-                    steps=steps, guidance_scale=guidance, 
-                    width=width, height=height, callback=progress_callback
-                )
-                gen_task = loop.run_in_executor(None, target_for_executor)
 
+                def progress_callback(step, timestep, latents):
+                    try:
+                        queue.put_nowait({
+                            "type": "progress", "index": i, "step": step + 1, "total_steps": steps
+                        })
+                    except asyncio.QueueFull:
+                        pass
+
+                # 将中文场景描述翻译成英文prompt
+                english_prompt = deepseek.translate_to_english(scene_cn)
+                logger.info(f"场景翻译完成: {english_prompt}")
+
+                # 构建适合本地diffusion的英文提示词
+                prompt = f"comic style, {english_prompt}, detailed, high quality"
+                logger.info(f"生成提示词: {prompt}")
+
+                # 启动图像生成任务
+                loop = asyncio.get_event_loop()
+                executor = loop.run_in_executor
+                gen_task = executor(
+                    None,
+                    diffusion_service.generate_image_with_style,
+                    prompt, "comic", steps, guidance, width, height, progress_callback
+                )
+
+                # 同时监听进度队列
                 done = False
                 while not done:
-                    progress_task = asyncio.create_task(queue.get())
-                    finished, pending = await asyncio.wait([gen_task, progress_task], return_when=asyncio.FIRST_COMPLETED)
+                    try:
+                        # 等待队列消息或生成任务完成
+                        progress_task = asyncio.create_task(queue.get())
+                        finished, pending = await asyncio.wait(
+                            [gen_task, progress_task],
+                            return_when=asyncio.FIRST_COMPLETED
+                        )
 
-                    if progress_task in finished:
-                        yield f"data: {json.dumps(progress_task.result())}\n\n"
+                        if progress_task in finished:
+                            progress_data = progress_task.result()
+                            yield f"data: {json.dumps(progress_data)}\n\n"
 
-                    if gen_task in finished:
-                        image_url = gen_task.result()
-                        while not queue.empty():
-                            yield f"data: {json.dumps(queue.get_nowait())}\n\n"
-                        
-                        logger.info("图片生成完成")
-                        
-                        image_data = base64.b64decode(image_url.split(',')[1])
-                        image_path = os.path.join(temp_dir, f"scene_{i+1}.png")
-                        with open(image_path, "wb") as f: f.write(image_data)
-                        image_paths.append(image_path)
-                        
-                        yield f"data: {json.dumps({'type': 'scene', 'index': i, 'description': chinese_description, 'image_url': image_url})}\n\n"
+                        if gen_task in finished:
+                            image_url = gen_task.result()
+                            # 确保所有剩余的进度消息都被处理
+                            while not queue.empty():
+                                progress_data = queue.get_nowait()
+                                yield f"data: {json.dumps(progress_data)}\n\n"
+
+                            logger.info(f"图片生成完成")
+
+                            # 保存图片到临时目录
+                            image_data = base64.b64decode(image_url.split(',')[1])
+                            image_path = os.path.join(temp_dir, f"scene_{i+1}.png")
+                            with open(image_path, "wb") as f:
+                                f.write(image_data)
+                            image_paths.append(image_path)
+
+                            # 只发送中文描述
+                            yield f"data: {json.dumps({'type': 'scene', 'index': i, 'description': scene_cn, 'image_url': image_url})}\n\n"
+                            done = True
+                            # 取消可能仍在等待的progress_task
+                            if not progress_task.done():
+                                progress_task.cancel()
+
+                    except Exception as task_e:
+                        logger.error(f"任务执行中发生错误: {task_e}")
                         done = True
-                        if not progress_task.done(): progress_task.cancel()
-                                
+                        if 'progress_task' in locals() and not progress_task.done():
+                            progress_task.cancel()
+                        raise task_e
+
             except Exception as e:
-                error_msg = f"场景 {i+1} 生成失败: {str(e)}\n{traceback.format_exc()}"
+                error_msg = f"场景 {i+1} 生成失败: {str(e)}"
                 logger.error(error_msg)
-                yield f"data: {json.dumps({'type': 'scene_error', 'index': i, 'message': str(e)})}\n\n"
+                yield f"data: {json.dumps({'type': 'scene_error', 'index': i, 'message': error_msg})}\n\n"
 
+        # 发送图片生成完成的消息，并包含会话ID
         yield f"data: {json.dumps({'type': 'all_images_generated', 'session_id': session_id})}\n\n"
-        yield f"data: {json.dumps({'type': 'complete', 'new_credit_balance': current_user.credits})}\n\n"
 
+        # 最新积分信息
+        yield f"data: {json.dumps({'type': 'complete', 'new_credit_balance': current_user.credits})}\n\n"
+            
     except Exception as e:
         error_msg = f"错误: {str(e)}\n{traceback.format_exc()}"
         logger.error(error_msg)
         yield f"data: {json.dumps({'type': 'error', 'message': error_msg})}\n\n"
+
 
 @app.post("/regenerate-image")
 async def regenerate_image(request: dict):
@@ -512,13 +476,13 @@ async def regenerate_image(request: dict):
             logger.info(f"图像提示词生成完成: {image_prompt}")
 
             # 构建最终提示词
-            final_prompt = f" {image_prompt}, detailed, high quality"
+            final_prompt = f"comic style, {image_prompt}, detailed, high quality"
             logger.info(f"最终提示词: {final_prompt}")
 
             # 生成图片，使用传入的steps参数
             image_url = diffusion_service.generate_image_with_style(
                 final_prompt,
-               
+                "comic",
                 steps,  # 使用传入的steps参数
                 7.5,  # guidance_scale
                 512,  # width
@@ -596,7 +560,12 @@ async def create_video(request: dict):
         import traceback
         logger.error(f"详细错误信息: {traceback.format_exc()}")
         return {"success": False, "message": str(e)}
-
+# 新增任务状态查询接口
+@app.get("/task-status/{task_id}")
+async def task_status(task_id: str):
+    status = task_queue.get_status(task_id)
+    position = task_queue.get_queue_position(task_id)
+    return {"task_id": task_id, "status": status, "queue_position": position}
 
 if __name__ == "__main__":
     logger.info("启动服务器...")

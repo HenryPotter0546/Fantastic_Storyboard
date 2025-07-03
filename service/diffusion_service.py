@@ -1,8 +1,14 @@
+# service/diffusion_service.py
 import os
-import time
 import logging
 import torch
-from diffusers import StableDiffusionPipeline, DPMSolverMultistepScheduler, StableDiffusionXLPipeline, KolorsPipeline
+from diffusers import (
+    StableDiffusionPipeline,
+    DPMSolverMultistepScheduler,
+    StableDiffusionXLPipeline,
+    KolorsPipeline,
+)
+from diffusers.loaders import LoraLoaderMixin
 from PIL import Image
 import base64
 import io
@@ -10,8 +16,9 @@ import yaml
 from dotenv import load_dotenv
 import ffmpeg
 import shutil
-from typing import List
-from typing import Callable, Optional
+from typing import List, Callable, Optional
+import threading
+import copy
 
 load_dotenv()
 
@@ -19,23 +26,35 @@ logger = logging.getLogger(__name__)
 
 
 class LocalDiffusionService:
+    _lora_lock = threading.Lock()
+
     def __init__(self, model_name: str = None):
         self.model_name = model_name
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.pipeline = None
+        self.lora_weights_loaded = False
+        self.lora_weights_path = None
+        self.lora_scale = 1.0
         self.model_config = None
+        self.current_lora_name = None
 
-        # 如果指定了模型名称，立即加载配置
+        # 保存原始权重的字典，支持多个组件
+        self._original_state_dicts = {}
+
         if model_name:
             self.model_config = self._load_model_config()
 
     def set_model(self, model_name: str):
         """设置要使用的模型（不立即加载）"""
         try:
-            # 如果设置的是不同的模型，清除当前模型
             if self.model_name != model_name:
                 logger.info(f"切换模型从 {self.model_name} 到 {model_name}")
                 self._unload_current_model()
+                self.lora_weights_loaded = False
+                self.lora_weights_path = None
+                self.lora_scale = 1.0
+                self.current_lora_name = None
+                self._original_state_dicts = {}
 
             self.model_name = model_name
             self.model_config = self._load_model_config()
@@ -51,7 +70,6 @@ class LocalDiffusionService:
             del self.pipeline
             self.pipeline = None
 
-            # 清理GPU内存
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
                 torch.cuda.synchronize()
@@ -67,7 +85,6 @@ class LocalDiffusionService:
         if self.model_name is None:
             raise ValueError("未设置模型名称，请先调用 set_model() 方法")
 
-        # 如果有不同的模型已加载，先卸载
         if self.pipeline is not None:
             current_model_path = getattr(self.pipeline, '_model_path', None)
             new_model_path = self.model_config['path']
@@ -121,7 +138,7 @@ class LocalDiffusionService:
         except Exception as e:
             logger.error(f"加载模型配置失败: {str(e)}")
             import traceback
-            logger.error(f"详细错误信息: {traceback.format_exc()}")
+            logger.error(traceback.format_exc())
             raise
 
     def _load_model(self):
@@ -133,7 +150,7 @@ class LocalDiffusionService:
             model_path = self.model_config['path']
             single_files = self.model_config.get('single_files', False)
             use_safetensors = self.model_config.get('use_safetensors', True)
-            model_type = self.model_config.get('type', 'sd')  # 默认为SD模型
+            model_type = self.model_config.get('type', 'sd')
 
             logger.info(f"模型路径: {model_path}")
             logger.info(f"模型类型: {model_type}")
@@ -141,7 +158,6 @@ class LocalDiffusionService:
             logger.info(f"使用safetensors: {use_safetensors}")
 
             if model_type.lower() == 'sdxl':
-                # 加载SDXL模型
                 if single_files:
                     logger.info(f"加载SDXL单文件模型: {model_path}")
                     self.pipeline = StableDiffusionXLPipeline.from_single_file(
@@ -150,7 +166,7 @@ class LocalDiffusionService:
                         safety_checker=None,
                         requires_safety_checker=False,
                         use_safetensors=use_safetensors,
-                        local_files_only=False  # 允许下载必要的文件
+                        local_files_only=False,
                     )
                 else:
                     logger.info(f"加载SDXL目录模型: {model_path}")
@@ -160,10 +176,9 @@ class LocalDiffusionService:
                         safety_checker=None,
                         requires_safety_checker=False,
                         use_safetensors=use_safetensors,
-                        local_files_only=False  # 允许下载必要的文件
+                        local_files_only=False,
                     )
             elif model_type.lower() == 'sd':
-                # 加载标准SD模型
                 if single_files:
                     logger.info(f"加载SD单文件模型: {model_path}")
                     self.pipeline = StableDiffusionPipeline.from_single_file(
@@ -172,7 +187,7 @@ class LocalDiffusionService:
                         safety_checker=None,
                         requires_safety_checker=False,
                         use_safetensors=use_safetensors,
-                        local_files_only=False  # 允许下载必要的文件
+                        local_files_only=False,
                     )
                 else:
                     logger.info(f"加载SD目录模型: {model_path}")
@@ -182,29 +197,26 @@ class LocalDiffusionService:
                         safety_checker=None,
                         requires_safety_checker=False,
                         use_safetensors=use_safetensors,
-                        local_files_only=False  # 允许下载必要的文件
+                        local_files_only=False,
                     )
-
             elif model_type.lower() == 'kolors':
                 self.pipeline = KolorsPipeline.from_pretrained(
-                    model_path, 
-                    torch_dtype=torch.float16, 
+                    model_path,
+                    torch_dtype=torch.float16,
                 )
+            else:
+                raise ValueError(f"未知模型类型: {model_type}")
 
-            # 使用更快的scheduler
             self.pipeline.scheduler = DPMSolverMultistepScheduler.from_config(
                 self.pipeline.scheduler.config
             )
 
-            # 移动到指定设备
             self.pipeline = self.pipeline.to(self.device)
 
-            # 启用内存优化
             if self.device == "cuda":
                 self.pipeline.enable_attention_slicing()
                 self.pipeline.enable_vae_slicing()
 
-            # 记录模型路径用于后续比较
             setattr(self.pipeline, '_model_path', model_path)
 
             logger.info("模型加载完成")
@@ -212,11 +224,11 @@ class LocalDiffusionService:
         except Exception as e:
             logger.error(f"模型加载失败: {str(e)}")
             import traceback
-            logger.error(f"详细错误信息: {traceback.format_exc()}")
+            logger.error(traceback.format_exc())
             raise
 
     def _get_available_models_from_config(self):
-        """从配置文件中获取可用的模型列表"""
+        """从配置文件中获取非LoRA的可用模型列表"""
         try:
             config_path = "config/model.yaml"
             logger.info(f"尝试读取配置文件获取可用模型: {config_path}")
@@ -232,19 +244,234 @@ class LocalDiffusionService:
                 logger.warning("配置文件为空")
                 return []
 
-            models = list(config.keys())
-            logger.info(f"从配置文件中读取到 {len(models)} 个模型: {models}")
+            # 过滤掉type为lora的模型
+            models = [name for name, conf in config.items() if conf.get('type', '').lower() != 'lora']
+            logger.info(f"从配置文件中读取到 {len(models)} 个非LoRA模型: {models}")
             return models
 
         except Exception as e:
             logger.error(f"读取配置文件失败: {str(e)}")
             import traceback
-            logger.error(f"详细错误信息: {traceback.format_exc()}")
+            logger.error(traceback.format_exc())
             return []
 
     def get_available_models(self):
         """获取可用的模型列表（公共方法）"""
         return self._get_available_models_from_config()
+
+    def _get_available_loras_from_config(self):
+        try:
+            config_path = "config/model.yaml"
+            if not os.path.exists(config_path):
+                logger.error(f"配置文件不存在: {config_path}")
+                return []
+
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config = yaml.safe_load(f)
+
+            if not config:
+                logger.warning("配置文件为空")
+                return []
+
+            loras = []
+            for name, conf in config.items():
+                if conf.get('type', '').lower() == 'lora':
+                    loras.append({
+                        'name': name,
+                        'path': conf['path'],
+                        'description': conf.get('description', ''),
+                        'prompt': conf.get('prompt', '')
+                    })
+            logger.info(f"加载到 {len(loras)} 个LoRA风格")
+            return loras
+        except Exception as e:
+            logger.error(f"读取LoRA配置失败: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return []
+
+    def get_available_loras(self):
+        """公共接口获取LoRA风格"""
+        return self._get_available_loras_from_config()
+
+    def _save_original_weights(self):
+        """保存原始权重到内存"""
+        if hasattr(self.pipeline, 'unet') and self.pipeline.unet is not None:
+            self._original_state_dicts['unet'] = copy.deepcopy(self.pipeline.unet.state_dict())
+            logger.info("已保存UNet原始权重")
+        
+        if hasattr(self.pipeline, 'text_encoder') and self.pipeline.text_encoder is not None:
+            self._original_state_dicts['text_encoder'] = copy.deepcopy(self.pipeline.text_encoder.state_dict())
+            logger.info("已保存TextEncoder原始权重")
+
+    def load_lora_weights(self, lora_name: str, scale: float = 1.0):
+        """改进的LoRA权重加载方法"""
+        with self._lora_lock:
+            if self.pipeline is None:
+                raise RuntimeError("请先加载主模型，再加载LoRA权重")
+
+            loras = self.get_available_loras()
+            lora_conf = next((l for l in loras if l['name'] == lora_name), None)
+            if not lora_conf:
+                raise FileNotFoundError(f"LoRA风格 {lora_name} 未在配置中找到")
+
+            lora_path = lora_conf['path']
+            if not os.path.exists(lora_path):
+                raise FileNotFoundError(f"LoRA权重文件不存在: {lora_path}")
+
+            # 检查是否已经加载了相同的LoRA
+            if (self.lora_weights_loaded and 
+                self.lora_weights_path == lora_path and 
+                abs(self.lora_scale - scale) < 1e-4):
+                logger.info(f"LoRA权重 {lora_name} 已加载且scale相同，无需重复加载")
+                return
+
+            try:
+                logger.info(f"加载LoRA权重: {lora_name}，路径: {lora_path}，scale: {scale}")
+
+                # 如果已经加载了其他LoRA，先卸载
+                if self.lora_weights_loaded:
+                    self.unload_lora_weights()
+
+                # 首次加载LoRA时保存原始权重
+                if not self._original_state_dicts:
+                    self._save_original_weights()
+
+                # 使用正确的API加载LoRA权重
+                try:
+                    # 方法1：使用load_lora_weights（推荐）
+                    self.pipeline.load_lora_weights(lora_path)
+                    logger.info("使用 load_lora_weights 方法加载成功")
+                except Exception as e1:
+                    logger.warning(f"load_lora_weights 方法失败: {e1}")
+                    try:
+                        # 方法2：直接加载到unet
+                        from diffusers.utils import convert_state_dict_to_diffusers
+                        
+                        # 加载LoRA权重文件
+                        if lora_path.endswith('.safetensors'):
+                            from safetensors.torch import load_file
+                            lora_state_dict = load_file(lora_path)
+                        else:
+                            lora_state_dict = torch.load(lora_path, map_location=self.device)
+                        
+                        # 转换为diffusers格式
+                        converted_state_dict = convert_state_dict_to_diffusers(lora_state_dict)
+                        
+                        # 加载到pipeline
+                        self.pipeline.load_lora_weights(converted_state_dict)
+                        logger.info("使用转换方法加载成功")
+                    except Exception as e2:
+                        logger.warning(f"转换方法也失败: {e2}")
+                        try:
+                            # 方法3：直接使用unet的load_attn_procs方法
+                            self.pipeline.unet.load_attn_procs(lora_path)
+                            logger.info("使用 load_attn_procs 方法加载成功")
+                        except Exception as e3:
+                            logger.error(f"所有LoRA加载方法都失败: {e3}")
+                            raise e3
+
+                # 设置LoRA scale
+                if hasattr(self.pipeline, 'set_lora_scale'):
+                    self.pipeline.set_lora_scale(scale)
+                else:
+                    # 手动设置scale
+                    self._manual_set_lora_scale(scale)
+
+                self.lora_weights_loaded = True
+                self.lora_weights_path = lora_path
+                self.lora_scale = scale
+                self.current_lora_name = lora_name
+
+                logger.info(f"LoRA权重 {lora_name} 加载成功，scale: {scale}")
+
+            except Exception as e:
+                logger.error(f"加载LoRA失败: {str(e)}")
+                import traceback
+                logger.error(traceback.format_exc())
+                raise
+
+    def _manual_set_lora_scale(self, scale: float):
+        """手动设置LoRA scale的方法"""
+        try:
+            # 如果pipeline有cross_attention_kwargs参数，可以通过这种方式设置
+            if hasattr(self.pipeline, 'unet'):
+                # 遍历unet的所有attention processor
+                for name, processor in self.pipeline.unet.attn_processors.items():
+                    if hasattr(processor, 'scale'):
+                        processor.scale = scale
+                    elif hasattr(processor, 'lora_scale'):
+                        processor.lora_scale = scale
+                logger.info(f"手动设置LoRA scale为: {scale}")
+        except Exception as e:
+            logger.warning(f"手动设置LoRA scale失败: {e}")
+
+    def unload_lora_weights(self):
+        """卸载LoRA权重，恢复主模型权重"""
+        with self._lora_lock:
+            if self.lora_weights_loaded:
+                logger.info("卸载LoRA权重，恢复主模型权重")
+                
+                try:
+                    # 方法1：使用unload_lora_weights
+                    if hasattr(self.pipeline, 'unload_lora_weights'):
+                        self.pipeline.unload_lora_weights()
+                        logger.info("使用 unload_lora_weights 方法卸载成功")
+                    else:
+                        # 方法2：恢复原始权重
+                        self._restore_original_weights()
+                        logger.info("使用权重恢复方法卸载成功")
+                    
+                    self.lora_weights_loaded = False
+                    self.lora_weights_path = None
+                    self.lora_scale = 1.0
+                    self.current_lora_name = None
+                    
+                    logger.info("LoRA权重已卸载")
+                except Exception as e:
+                    logger.error(f"卸载LoRA权重失败: {e}")
+                    # 强制恢复原始权重
+                    self._restore_original_weights()
+                    self.lora_weights_loaded = False
+                    self.lora_weights_path = None
+                    self.lora_scale = 1.0
+                    self.current_lora_name = None
+            else:
+                logger.info("未加载任何LoRA权重，无需卸载")
+
+    def _restore_original_weights(self):
+        """恢复原始权重"""
+        try:
+            if 'unet' in self._original_state_dicts:
+                self.pipeline.unet.load_state_dict(self._original_state_dicts['unet'], strict=False)
+                self.pipeline.unet.to(self.device)
+                logger.info("已恢复UNet原始权重")
+            
+            if 'text_encoder' in self._original_state_dicts:
+                self.pipeline.text_encoder.load_state_dict(self._original_state_dicts['text_encoder'], strict=False)
+                self.pipeline.text_encoder.to(self.device)
+                logger.info("已恢复TextEncoder原始权重")
+        except Exception as e:
+            logger.error(f"恢复原始权重失败: {e}")
+
+    def set_lora_scale(self, scale: float):
+        """动态设置LoRA权重scale"""
+        with self._lora_lock:
+            if not self.lora_weights_loaded:
+                raise RuntimeError("未加载任何LoRA权重，无法设置scale")
+
+            logger.info(f"设置LoRA权重scale: {scale}")
+            try:
+                if hasattr(self.pipeline, 'set_lora_scale'):
+                    self.pipeline.set_lora_scale(scale)
+                else:
+                    self._manual_set_lora_scale(scale)
+                
+                self.lora_scale = scale
+                logger.info(f"LoRA scale设置为: {scale}")
+            except Exception as e:
+                logger.error(f"设置LoRA权重scale失败: {str(e)}")
+                raise
 
     def generate_image(
         self,
@@ -254,38 +481,55 @@ class LocalDiffusionService:
         guidance_scale: float = 7.5,
         width: int = 512,
         height: int = 512,
-        callback: Optional[Callable] = None
+        callback: Optional[Callable] = None,
     ) -> str:
         """生成图片并返回base64编码的图片数据"""
         try:
             logger.info(f"开始生成图片，提示词: {prompt}")
             logger.info(f"参数: steps={steps}, guidance={guidance_scale}, size={width}x{height}")
+            
+            # 记录LoRA状态
+            if self.lora_weights_loaded:
+                logger.info(f"当前已加载LoRA: {self.current_lora_name}, scale: {self.lora_scale}")
 
             self._ensure_model_loaded()
 
-            # 设置默认的负面提示词
             if negative_prompt is None:
-                negative_prompt = "low quality, bad quality, sketches, blurry, blur, out of focus, grainy, text, watermark, logo, banner, extra digits, mutated hands, poorly drawn hands, poorly drawn face, mutation, deformed, ugly, disgusting, amputation, extra limbs, extra arms, extra legs, disfigured, gross proportions, malformed limbs, missing arms, missing legs, floating limbs, disconnected limbs, long neck, long body, mutated hands and fingers, out of frame, double, two heads, blurred, ugly, disfigured, too many limbs, deformed, repetitive, black and white, grainy, extra limbs, bad anatomy, high pass filter, airbrush, portrait, zoomed, soft light, smooth skin, closeup, deformed, extra limbs, extra faces, mutated hands, bad anatomy, bad proportions, blind, bad eyes, ugly eyes, dead eyes, blur, vignette, out of shot, out of focus, gaussian, closeup, monochrome, grainy, noisy, text, writing, watermark, logo, overexposed, underexposed, over-saturated, under-saturated"
+                negative_prompt = (
+                    "low quality, bad quality, sketches, blurry, blur, out of focus, grainy, text, watermark, logo, banner, "
+                    "extra digits, mutated hands, poorly drawn hands, poorly drawn face, mutation, deformed, ugly, disgusting, "
+                    "amputation, extra limbs, extra arms, extra legs, disfigured, gross proportions, malformed limbs, missing arms, "
+                    "missing legs, floating limbs, disconnected limbs, long neck, long body, mutated hands and fingers, out of frame, "
+                    "double, two heads, blurred, ugly, disfigured, too many limbs, deformed, repetitive, black and white, grainy, "
+                    "extra limbs, bad anatomy, high pass filter, airbrush, portrait, zoomed, soft light, smooth skin, closeup, "
+                    "deformed, extra limbs, extra faces, mutated hands, bad anatomy, bad proportions, blind, bad eyes, ugly eyes, "
+                    "dead eyes, blur, vignette, out of shot, out of focus, gaussian, closeup, monochrome, grainy, noisy, text, writing, "
+                    "watermark, logo, overexposed, underexposed, over-saturated, under-saturated"
+                )
 
-            # 生成图片
             with torch.no_grad():
-                image = self.pipeline(
-                    prompt=prompt,
-                    negative_prompt=negative_prompt,
-                    num_inference_steps=steps,
-                    guidance_scale=guidance_scale,
-                    width=width,
-                    height=height,
-                    callback=callback,         # 回调函数
-                    callback_steps=1           # 确保每一步都回调
-                ).images[0]
+                # 准备生成参数
+                generate_kwargs = {
+                    "prompt": prompt,
+                    "negative_prompt": negative_prompt,
+                    "num_inference_steps": steps,
+                    "guidance_scale": guidance_scale,
+                    "width": width,
+                    "height": height,
+                }
+                
+                # 添加callback参数（如果支持）
+                if callback is not None:
+                    generate_kwargs.update({
+                        "callback": callback,
+                        "callback_steps": 1,
+                    })
 
-            # 转换为base64
+                image = self.pipeline(**generate_kwargs).images[0]
+
             buffered = io.BytesIO()
             image.save(buffered, format="PNG")
             img_str = base64.b64encode(buffered.getvalue()).decode()
-
-            # 返回data URL格式
             image_url = f"data:image/png;base64,{img_str}"
 
             logger.info("图片生成完成")
@@ -294,7 +538,7 @@ class LocalDiffusionService:
         except Exception as e:
             logger.error(f"生成图片时发生错误: {str(e)}")
             import traceback
-            logger.error(f"详细错误信息: {traceback.format_exc()}")
+            logger.error(traceback.format_exc())
             raise
 
     def generate_image_with_style(
@@ -305,43 +549,34 @@ class LocalDiffusionService:
         guidance_scale: float = 7.5,
         width: int = 512,
         height: int = 512,
-        callback: Optional[Callable] = None
+        callback: Optional[Callable] = None,
     ) -> str:
-        # 开关：设置为 True 使用长提示词，False 使用精简版
-        USE_LONG_NEGATIVE_PROMPT = False 
+        USE_LONG_NEGATIVE_PROMPT = False
 
-        # 长而全面的负向提示词 (适用于高 Token 上限模型)
         long_negative_prompt = (
-            # 文字和签名移除
             "text, letters, words, numbers, digits, writing, signature, watermark, logo, username, artist name, copyright, url, stamp, error, inscription, "
-            # 质量和解剖结构
             "low quality, worst quality, bad quality, jpeg artifacts, blurry, noisy, grainy, ugly, disgusting, deformed, mutated, extra limbs, extra fingers, fewer fingers, bad anatomy, malformed limbs, mutated hands, poorly drawn hands, poorly drawn face, missing arms, missing legs, long neck, long body, disfigured, gross proportions, "
-            # 风格和构图
             "out of frame, body out of frame, cropped, cut off, duplicate, two heads, black and white, monochrome, sketches, boring, dull"
         )
-        
-        # 精简版负向提示词 (适用于低 Token 上限模型，如 SD 1.5)
+
         short_negative_prompt = (
-            "text, letters, writing, signature, watermark, logo, " # 主要针对文字
-            "low quality, worst quality, bad quality, blurry, ugly, deformed, mutated hands, poorly drawn face" # 主要针对质量和常见崩坏点
+            "text, letters, writing, signature, watermark, logo, "
+            "low quality, worst quality, bad quality, blurry, ugly, deformed, mutated hands, poorly drawn face"
             "blurry face, blurred face, poorly drawn face, bad face, distorted face, extra eyes, missing eyes, asymmetrical eyes, cross-eyed, lazy eye, extra mouth, missing mouth, deformed mouth, extra nose, missing nose, deformed nose"
         )
 
-        # 根据开关选择要使用的版本
         negative_prompt_to_use = long_negative_prompt if USE_LONG_NEGATIVE_PROMPT else short_negative_prompt
         logger.info(f"Using {'Long' if USE_LONG_NEGATIVE_PROMPT else 'Short'} Negative Prompt.")
 
-        """根据风格生成图片"""
         try:
-            # 根据风格调整提示词
             style_prompts = {
-                "comic": "comic style, manga style, anime style, vibrant colors, bold lines, dynamic composition",
+                "comic": "NONE",
                 "realistic": "photorealistic, highly detailed, professional photography, sharp focus",
                 "artistic": "artistic style, painterly, oil painting, masterpiece, beautiful composition",
                 "cartoon": "cartoon style, cute, colorful, simple lines, friendly",
                 "sketch": "sketch style, pencil drawing, black and white, artistic sketch",
                 "pixel": "pixel art style, 8-bit, retro gaming, pixelated, chibi",
-                "pixel_comic": "pixel art style, comic panel, comic book layout, 8-bit, 16-bit, low resolution, blocky, pixelated, clear lines, dynamic composition, retro gaming aesthetic"
+                "pixel_comic": "pixel art style, comic panel, comic book layout, 8-bit, 16-bit, low resolution, blocky, pixelated, clear lines, dynamic composition, retro gaming aesthetic",
             }
 
             style_prompt = style_prompts.get(style, style_prompts["pixel_comic"])
@@ -354,66 +589,33 @@ class LocalDiffusionService:
                 guidance_scale=guidance_scale,
                 width=width,
                 height=height,
-                callback=callback
+                callback=callback,
             )
-
         except Exception as e:
             logger.error(f"生成风格化图片时发生错误: {str(e)}")
             raise
-
-    async def handle_image_action(self, task_id: str, action: str, index: int) -> dict:
-        """
-        处理图片操作（重新生成变体）
-
-        Args:
-            task_id: 任务ID（本地diffusion中不使用）
-            action: 操作类型（本地diffusion中只支持重新生成）
-            index: 图片索引（本地diffusion中不使用）
-
-        Returns:
-            dict: 包含操作结果的字典
-        """
-        try:
-            logger.info(f"收到图片操作请求: action={action}")
-
-            # 本地diffusion不支持upscale和variation，只能重新生成
-            # 这里可以扩展为保存原始prompt并重新生成
-            return {
-                "success": False,
-                "message": "本地diffusion暂不支持图片操作，请重新生成"
-            }
-
-        except Exception as e:
-            logger.error(f"处理图片操作失败: {str(e)}")
-            return {
-                "success": False,
-                "message": f"处理失败: {str(e)}"
-            }
 
     def create_video_from_images(self, image_paths: List[str], output_path: str, fps: float = 0.5):
         """将图片拼接成视频"""
         try:
             if not image_paths:
                 raise ValueError("图片列表不能为空")
-            
-            # 确保输出目录存在
+
             output_dir = os.path.dirname(output_path)
             if not os.path.exists(output_dir):
                 os.makedirs(output_dir)
-            
-            # 使用ffmpeg将图片拼接成视频
+
             (
-                ffmpeg
-                .input('pipe:', r=str(fps), f='image2pipe')
+                ffmpeg.input('pipe:', r=str(fps), f='image2pipe')
                 .output(output_path, vcodec='libx264', pix_fmt='yuv420p', y='-y')
                 .run(input=b''.join(open(p, 'rb').read() for p in image_paths))
             )
-            
+
             logger.info(f"视频创建成功: {output_path}")
             return output_path
-            
+
         except Exception as e:
             logger.error(f"创建视频失败: {str(e)}")
             import traceback
-            logger.error(f"详细错误信息: {traceback.format_exc()}")
+            logger.error(traceback.format_exc())
             raise
