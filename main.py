@@ -276,9 +276,6 @@ async def generate_scenes(
         image_paths = []
         deepseek = DeepSeekService()
 
-
-        # 初始化百度翻译
-        baidu = BaiduTranslateService()
         
 
         # 检查是否已设置模型
@@ -407,6 +404,39 @@ async def generate_scenes(
         yield f"data: {json.dumps({'type': 'error', 'message': error_msg})}\n\n"
 
 
+@app.post("/save-scene-descriptions")
+async def save_scene_descriptions(request: dict):
+    """保存场景描述到txt文件"""
+    try:
+        session_id = request.get("session_id")
+        descriptions = request.get("descriptions")
+
+        if not session_id or not descriptions:
+            raise HTTPException(status_code=400, detail="Missing session_id or descriptions")
+
+        # 确保temptxt目录存在
+        temp_txt_dir = "temptxt"
+        if not os.path.exists(temp_txt_dir):
+            os.makedirs(temp_txt_dir)
+
+        # 生成txt文件内容
+        txt_content = ""
+        for i, description in enumerate(descriptions):
+            if description:  # 只保存非空描述
+                txt_content += f"场景{i + 1}：{description}\n"
+
+        # 保存到文件
+        txt_file_path = os.path.join(temp_txt_dir, f"{session_id}.txt")
+        with open(txt_file_path, 'w', encoding='utf-8') as f:
+            f.write(txt_content)
+
+        logger.info(f"场景描述已保存到: {txt_file_path}")
+        return {"success": True, "message": "场景描述保存成功"}
+
+    except Exception as e:
+        logger.error(f"保存场景描述失败: {str(e)}")
+        return {"success": False, "message": str(e)}
+
 @app.post("/regenerate-image")
 async def regenerate_image(request: dict):
     global current_generation_task, pending_regeneration_request
@@ -414,9 +444,10 @@ async def regenerate_image(request: dict):
     try:
         description = request.get("description")
         scene_index = request.get("sceneIndex")
-        steps = request.get("steps", 30)  # 新增：从请求中获取steps参数，默认为30
+        steps = request.get("steps", 30)
+        session_id = request.get("session_id")  # 新增：获取session_id
 
-        logger.info(f"收到重新生成图片请求: scene_index={scene_index}, description={description}, steps={steps}")
+        logger.info(f"收到重新生成图片请求: scene_index={scene_index}, description={description}, steps={steps}, session_id={session_id}")
 
         if scene_index is None or description is None:
             raise HTTPException(status_code=400, detail="Missing description or scene_index parameter")
@@ -442,7 +473,8 @@ async def regenerate_image(request: dict):
             pending_regeneration_request = {
                 "description": description,
                 "scene_index": scene_index,
-                "steps": steps
+                "steps": steps,
+                "session_id": session_id  # 新增：存储session_id
             }
 
             # 等待当前任务完成
@@ -479,6 +511,24 @@ async def regenerate_image(request: dict):
                 512  # height
             )
 
+            # 新增：如果提供了session_id，则保存图片到对应目录
+            if session_id:
+                try:
+                    temp_dir = os.path.join("temp", session_id)
+                    if os.path.exists(temp_dir):
+                        # 解码base64图片数据
+                        image_data = base64.b64decode(image_url.split(',')[1])
+                        # 覆盖原有图片文件
+                        image_path = os.path.join(temp_dir, f"scene_{scene_index + 1}.png")
+                        with open(image_path, "wb") as f:
+                            f.write(image_data)
+                        logger.info(f"重新生成的图片已保存并覆盖: {image_path}")
+                    else:
+                        logger.warning(f"临时目录不存在: {temp_dir}")
+                except Exception as save_error:
+                    logger.error(f"保存重新生成的图片失败: {str(save_error)}")
+                    # 不影响主要流程，继续返回结果
+
             logger.info("重新生成图片完成")
 
             return {
@@ -499,7 +549,6 @@ async def regenerate_image(request: dict):
             "success": False,
             "message": str(e)
         }
-
 
 @app.get("/video", response_class=HTMLResponse)
 async def get_video_page():
@@ -539,6 +588,12 @@ async def create_video(request: dict):
         shutil.rmtree(temp_dir)
         logger.info(f"已清理临时目录: {temp_dir}")
 
+        # 注意：不删除txt文件，保留用于后续查看
+        # txt文件路径: temptxt/{session_id}.txt
+        txt_file_path = os.path.join("temptxt", f"{session_id}.txt")
+        if os.path.exists(txt_file_path):
+            logger.info(f"场景描述文件保留在: {txt_file_path}")
+
         return {"success": True, "video_url": f"/static/videos/{session_id}.mp4"}
 
     except Exception as e:
@@ -546,7 +601,6 @@ async def create_video(request: dict):
         import traceback
         logger.error(f"详细错误信息: {traceback.format_exc()}")
         return {"success": False, "message": str(e)}
-
 
 if __name__ == "__main__":
     logger.info("启动服务器...")
