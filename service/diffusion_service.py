@@ -417,3 +417,46 @@ class LocalDiffusionService:
             import traceback
             logger.error(f"详细错误信息: {traceback.format_exc()}")
             raise
+
+
+def generate_img2img(self, prompt: str, image: Image.Image, strength: float = 0.8,
+                     guidance_scale: float = 7.5, num_inference_steps: int = 20,
+                     negative_prompt: str = "", width: int = 512, height: int = 512):
+    """使用当前加载的模型进行图生图生成"""
+    self._ensure_model_loaded()
+
+    # 调整输入图片大小
+    image = image.resize((width, height))
+
+    # 检查是否为SDXL模型
+    if hasattr(self.pipeline, 'unet') and hasattr(self.pipeline.unet.config, 'in_channels'):
+        in_channels = self.pipeline.unet.config.in_channels
+        is_sdxl = in_channels == 4 and hasattr(self.pipeline, 'text_encoder_2')
+    else:
+        is_sdxl = False
+
+    if is_sdxl:
+        # SDXL图生图
+        from diffusers import StableDiffusionXLImg2ImgPipeline
+        # 这里需要根据实际情况调整
+        result = self.pipeline(
+            prompt=prompt,
+            negative_prompt=negative_prompt,
+            image=image,
+            strength=strength,
+            guidance_scale=guidance_scale,
+            num_inference_steps=num_inference_steps
+        )
+    else:
+        # 标准SD图生图
+        from diffusers import StableDiffusionImg2ImgPipeline
+        result = self.pipeline(
+            prompt=prompt,
+            negative_prompt=negative_prompt,
+            image=image,
+            strength=strength,
+            guidance_scale=guidance_scale,
+            num_inference_steps=num_inference_steps
+        )
+
+    return result.images[0]

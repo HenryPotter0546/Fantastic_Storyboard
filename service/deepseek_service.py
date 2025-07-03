@@ -13,7 +13,9 @@ class DeepSeekService:
         if not self.api_key:
             raise ValueError("未设置 SILICONFLOW_API_KEY 环境变量")
 
+
         self.api_url = "https://api.siliconflow.cn/v1/chat/completions"
+
         # 创建一个可复用的异步客户端实例
         self.client = httpx.AsyncClient(timeout=60.0)
 
@@ -65,7 +67,9 @@ class DeepSeekService:
             return translated_text
 
         except httpx.RequestError as e:
+
             raise Exception(f"调用SiliconFlow API翻译失败: {str(e)}")
+
         except (KeyError, IndexError) as e:
             raise Exception(f"解析API响应失败: {str(e)}")
 
@@ -160,7 +164,9 @@ class DeepSeekService:
         except (KeyError, IndexError) as e:
             raise Exception(f"解析API响应失败: {str(e)}")
 
+
     async def split_into_scenes(self, novel_text, num_scenes=10):
+
         """将小说文本分割成场景描述"""
         prompt = f"""作为一个为小说配图的工作者，请将以下小说文本分割成{num_scenes}个场景，每个场景用一段简短的描述概括，适合用于生成漫画分镜。
 
@@ -238,6 +244,7 @@ class DeepSeekService:
             return [scene.strip() for scene in scenes if scene.strip()]
 
         except httpx.RequestError as e:
+
             error_detail = ""
             try:
                 error_detail = response.json()

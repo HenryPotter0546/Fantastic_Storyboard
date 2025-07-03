@@ -20,7 +20,9 @@ from datetime import timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import Depends, status
 from service.database import get_db
+
 import functools
+
 
 # 配置日志
 logging.basicConfig(level=logging.INFO)
@@ -274,6 +276,11 @@ async def generate_scenes(
         image_paths = []
         deepseek = DeepSeekService()
 
+
+        # 初始化百度翻译
+        baidu = BaiduTranslateService()
+        
+
         # 检查是否已设置模型
         if diffusion_service.model_name is None:
             error_msg = "请先选择并加载模型"
@@ -297,8 +304,10 @@ async def generate_scenes(
         # 分割场景（得到中文描述）
         yield f"data: {json.dumps({'type': 'info', 'message': '正在构思故事情节和分镜...'})}\n\n"
 
+
         # 【核心修改】明确使用 process_novel_to_scenes
         scenes_data = await deepseek.process_novel_to_scenes(text, num_scenes)
+
 
         # --- 3. 【核心修改】适配前端协议 ---
         # 提取纯中文字符串列表，以匹配前端在 'start' 事件中对 data.scenes 的期望
@@ -332,6 +341,8 @@ async def generate_scenes(
                         queue.put_nowait({"type": "progress", "index": i, "step": step + 1, "total_steps": steps})
                     except asyncio.QueueFull:
                         pass
+
+
 
                 loop = asyncio.get_event_loop()
 
