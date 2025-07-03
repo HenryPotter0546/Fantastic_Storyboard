@@ -13,8 +13,8 @@ db_host = os.getenv("DB_HOST")
 db_port = os.getenv("DB_PORT")
 db_name = os.getenv("DB_NAME")
 
-SQLALCHEMY_DATABASE_URL = f"mysql+aiomysql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
-
+SQLALCHEMY_DATABASE_URL = "mysql+aiomysql://root:zjw123123@127.0.0.1:3306/javaee4"
+print(f"数据库连接 URL: {SQLALCHEMY_DATABASE_URL}")  # 检查输出是否为 127.0.0.1
 engine = create_async_engine(
     SQLALCHEMY_DATABASE_URL,
     # 添加连接池设置

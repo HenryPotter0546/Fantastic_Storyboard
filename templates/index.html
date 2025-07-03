@@ -233,6 +233,22 @@
             <div id="modelStatus" class="message-box" style="display: none;"></div>
         </div>
 
+        <!-- LoRA风格管理模块 -->
+        <div class="section-box">
+            <h3>风格管理</h3>
+            <label for="loraSelect">选择风格:</label>
+            <select id="loraSelect" style="width: 100%; padding: 8px; margin-bottom: 8px;">
+                <option value="">加载失败或无风格</option>
+            </select>
+            <label for="loraScaleInput">权重 scale (0.0 - 2.0):</label>
+            <input type="number" id="loraScaleInput" min="0" max="2" step="0.1" value="1.0" style="width: 100px; margin-bottom: 8px;">
+            <div>
+                <button id="loadLoraBtn" style="margin-right: 10px;">加载风格</button>
+                <button id="unloadLoraBtn">卸载风格</button>
+            </div>
+            <div id="loraStatusMessage" style="margin-top: 8px; color: #555;"></div>
+        </div>
+
         <div class="section-box">
             <h3>生成参数</h3>
             <div class="param-grid">
@@ -263,10 +279,11 @@
     let currentUser = null;
     let isModelLoaded = false;
     let isLoadingModel = false;
+    let selectedModel = null;
 
     // --- 应用初始化 ---
     window.addEventListener('load', initApp);
-
+  
     async function initApp() {
         if (!token) {
             window.location.href = '/login?session=expired';
@@ -274,9 +291,10 @@
         }
         await getUserInfo();
         if (currentUser) {
-            // 这些函数现在可以安全地假设用户信息已存在
             await loadAvailableModels();
             await checkModelStatus();
+            await loadLorasToSelect();
+            await updateLoraStatus();
         }
     }
 
@@ -328,6 +346,89 @@
         }
     }
 
+    async function loadLorasToSelect() {
+        try {
+            const resp = await fetch('/available-loras');
+            const data = await resp.json();
+            const select = document.getElementById('loraSelect');
+            select.innerHTML = '';
+            if (data.loras && data.loras.length > 0) {
+                select.appendChild(new Option('请选择风格', ''));
+                data.loras.forEach(lora => {
+                    const option = new Option(`${lora.name} - ${lora.description}`, lora.name);
+                    select.appendChild(option);
+                });
+            } else {
+                select.appendChild(new Option('无可用风格', ''));
+            }
+        } catch (e) {
+            console.error('获取风格列表失败', e);
+            const select = document.getElementById('loraSelect');
+            select.innerHTML = '<option value="">获取失败</option>';
+        }
+    }
+
+    document.getElementById('loadLoraBtn').addEventListener('click', async () => {
+        const loraName = document.getElementById('loraSelect').value;
+        if (!loraName) {
+            alert('请选择一个风格');
+            return;
+        }
+        const res = await fetch('/load-lora', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({lora_name: loraName})
+        });
+        const data = await res.json();
+        document.getElementById('loraStatusMessage').textContent = data.message || '操作完成';
+        if (data.success) {
+            // 加载成功后默认scale显示1.0
+            document.getElementById('loraScaleInput').value = "1.0";
+        }
+    });
+
+    document.getElementById('loraScaleInput').addEventListener('change', async () => {
+        const scale = parseFloat(document.getElementById('loraScaleInput').value);
+        if (isNaN(scale) || scale < 0 || scale > 2) {
+            alert('权重scale需在0到2之间');
+            return;
+        }
+        const res = await fetch('/set-lora-scale', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({scale: scale})
+        });
+        const data = await res.json();
+        document.getElementById('loraStatusMessage').textContent = data.message || 'scale调整完成';
+    });
+
+    document.getElementById('unloadLoraBtn').addEventListener('click', async () => {
+        const res = await fetch('/unload-lora', {method: 'POST'});
+        const data = await res.json();
+        document.getElementById('loraStatusMessage').textContent = data.message || '操作完成';
+        if (data.success) {
+            document.getElementById('loraScaleInput').value = "1.0";
+        }
+    });
+
+    async function updateLoraStatus() {
+        try {
+            const res = await fetch('/lora-status');
+            const data = await res.json();
+            const statusMsg = data.loaded 
+                ? `当前加载风格: ${data.name || '未知'}，权重scale: ${data.scale.toFixed(2)}`
+                : "未加载任何风格";
+            document.getElementById('loraStatusMessage').textContent = statusMsg;
+            if (data.loaded) {
+                document.getElementById('loraScaleInput').value = data.scale.toFixed(2);
+            } else {
+                document.getElementById('loraScaleInput').value = "1.0";
+            }
+        } catch (e) {
+            console.error('获取LoRA状态失败', e);
+        }
+    }
+
     async function checkModelStatus() {
         try {
             const response = await fetch('/model-status');
@@ -344,7 +445,6 @@
             showInitialModelSelection();
         }
     }
-
 
     function showCurrentModelInfo(modelName) {
         document.getElementById('currentModelText').textContent = `当前模型: ${modelName}`;
@@ -501,6 +601,8 @@
         generateComic();
     }
 
+
+
     // --- 图生图功能 ---
     function goToImg2Img() {
         // 构建8081端口的img2img URL
@@ -509,6 +611,7 @@
         // 在新标签页中打开
         window.open(img2imgUrl, '_blank');
     }
+
 
 </script>
 </body>

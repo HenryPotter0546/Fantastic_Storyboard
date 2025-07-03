@@ -22,7 +22,7 @@ from fastapi import Depends, status
 from service.database import get_db
 
 import functools
-
+from fastapi import Query
 
 # 配置日志
 logging.basicConfig(level=logging.INFO)
@@ -48,7 +48,11 @@ class NovelRequest(BaseModel):
 class SceneResponse(BaseModel):
     description: str
     image_url: str
+class LoadLoraRequest(BaseModel):
+    lora_name: str
 
+class SetLoraScaleRequest(BaseModel):
+    scale: float
 
 # --- 登录端点 ---
 @app.post("/token", response_model=schemas.Token)
@@ -121,7 +125,91 @@ async def read_login_page_again():
 async def pic_page():
     return FileResponse("templates/pic.html")
 
+from fastapi import Request
 
+# ... 你已有代码 ...
+@app.get("/available-loras")
+async def available_loras():
+    try:
+        loras = diffusion_service.get_available_loras()
+        return {"loras": loras}
+    except Exception as e:
+        logger.error(f"获取LoRA列表失败: {str(e)}")
+        return {"loras": [], "error": str(e)}
+    
+class SetLoraRequest(BaseModel):
+    lora_name: str
+    scale: float = 1.0
+
+@app.post("/set-lora")
+async def set_lora(request: SetLoraRequest):
+    try:
+        diffusion_service.load_lora_weights(request.lora_name, request.scale)
+        lora_info = next((l for l in diffusion_service.get_available_loras() if l['name'] == request.lora_name), None)
+        prompt = lora_info.get('prompt', '') if lora_info else ''
+        return {
+            "success": True,
+            "message": f"LoRA {request.lora_name} 加载成功，权重scale={request.scale}",
+            "prompt": prompt
+        }
+    except Exception as e:
+        logger.error(f"设置LoRA失败: {str(e)}")
+        return {"success": False, "message": str(e)}
+@app.post("/unload-lora")
+async def unload_lora():
+    try:
+        diffusion_service.unload_lora_weights()
+        return {"success": True, "message": "LoRA权重已卸载"}
+    except Exception as e:
+        logger.error(f"卸载LoRA失败: {str(e)}")
+        return {"success": False, "message": str(e)}
+
+@app.get("/lora-status")
+async def lora_status():
+    return {
+        "loaded": diffusion_service.lora_weights_loaded,
+        "name": None,
+        "path": diffusion_service.lora_weights_path,
+        "scale": getattr(diffusion_service, "lora_scale", 1.0)
+    }
+
+@app.post("/load-lora")
+async def load_lora(request: LoadLoraRequest):
+    """
+    只加载LoRA权重，不调整scale，默认1.0
+    """
+    try:
+        diffusion_service.load_lora_weights(request.lora_name)
+        return {"success": True, "message": f"LoRA {request.lora_name} 权重加载成功，scale为默认1.0"}
+    except Exception as e:
+        return {"success": False, "message": str(e)}
+
+@app.post("/set-lora-scale")
+async def set_lora_scale(request: SetLoraScaleRequest):
+    """
+    仅调整已加载LoRA的权重scale，无需重新加载权重
+    """
+    try:
+        diffusion_service.set_lora_scale(request.scale)
+        return {"success": True, "message": f"LoRA权重scale调整为 {request.scale}"}
+    except Exception as e:
+        return {"success": False, "message": str(e)}
+
+
+@app.post("/unload-lora")
+async def unload_lora():
+    try:
+        diffusion_service.unload_lora_weights()
+        return {"success": True, "message": "LoRA权重已卸载"}
+    except Exception as e:
+        return {"success": False, "message": f"卸载LoRA失败: {str(e)}"}
+
+@app.get("/lora-status")
+async def lora_status():
+    return {
+        "loaded": diffusion_service.lora_weights_loaded,
+        "path": diffusion_service.lora_weights_path
+    }
 @app.get("/available-models")
 async def get_available_models():
     """获取可用的模型列表"""
@@ -252,7 +340,6 @@ async def novel_to_comic_stream(
         media_type="text/event-stream"
     )
 
-
 async def generate_scenes(
     text: str,
     num_scenes: int,
@@ -276,16 +363,15 @@ async def generate_scenes(
         image_paths = []
         deepseek = DeepSeekService()
 
-        
 
-        # 检查是否已设置模型
+        # 确保模型已经加载
+
         if diffusion_service.model_name is None:
             error_msg = "请先选择并加载模型"
             logger.error(error_msg)
             yield f"data: {json.dumps({'type': 'error', 'message': error_msg})}\n\n"
             return
 
-        # 检查模型是否已加载，如果没有则自动加载
         if not diffusion_service.is_model_loaded():
             logger.info("模型未加载，开始自动加载...")
             yield f"data: {json.dumps({'type': 'info', 'message': f'模型 {diffusion_service.model_name} 未加载，正在自动加载中...'})}\n\n"
@@ -302,6 +388,7 @@ async def generate_scenes(
         yield f"data: {json.dumps({'type': 'info', 'message': '正在构思故事情节和分镜...'})}\n\n"
 
 
+
         # 【核心修改】明确使用 process_novel_to_scenes
         scenes_data = await deepseek.process_novel_to_scenes(text, num_scenes)
 
@@ -312,9 +399,24 @@ async def generate_scenes(
         logger.info(f"场景分割完成，共 {len(scenes_data)} 个场景")
 
         # 发送 'start' 事件，其数据结构与你同事版本的前端期望完全一致
+
         yield f"data: {json.dumps({'type': 'start', 'total_scenes': len(scenes_data), 'scenes': chinese_descriptions_list, 'session_id': session_id})}\n\n"
 
-        # --- 4. 逐个生成图片 ---
+        # --- 【新增部分】获取当前加载的LoRA prompt ---
+        current_lora_prompt = ""
+        if diffusion_service.lora_weights_loaded and diffusion_service.lora_weights_path:
+            loras = diffusion_service.get_available_loras()
+            # 兼容路径格式差异，使用 normpath
+            current_path_norm = os.path.normpath(diffusion_service.lora_weights_path)
+            for lora in loras:
+                if os.path.normpath(lora['path']) == current_path_norm:
+                    current_lora_prompt = lora.get('prompt', '')
+                    logger.info(f"检测到已加载LoRA: {lora['name']}，提示词: {current_lora_prompt}")
+                    break
+        else:
+            logger.info("未检测到已加载LoRA")
+
+        # --- 生成图片 ---
         logger.info("开始生成图片...")
         for i, scene_info in enumerate(scenes_data):
             logger.info(f"处理第 {i + 1}/{len(scenes_data)} 个场景")
@@ -327,8 +429,8 @@ async def generate_scenes(
                     yield f"data: {json.dumps({'type': 'scene_error', 'index': i, 'message': 'AI未能生成有效的绘图指令。'})}\n\n"
                     continue
 
-                # 不再需要翻译，直接使用
-                prompt_for_drawing = f"comic style, {english_prompt}, detailed, high quality"
+                # 【核心修改】拼接LoRA提示词和原英文提示词
+                prompt_for_drawing = f" {current_lora_prompt}, {english_prompt}, detailed, high quality"
                 logger.info(f"生成提示词: {prompt_for_drawing}")
 
                 queue = asyncio.Queue()
@@ -343,7 +445,8 @@ async def generate_scenes(
 
                 loop = asyncio.get_event_loop()
 
-                # 【重要】使用 functools.partial 来正确调用 run_in_executor
+                import functools
+
                 target_for_executor = functools.partial(
                     diffusion_service.generate_image_with_style,
                     prompt=prompt_for_drawing, style="comic",
@@ -375,7 +478,11 @@ async def generate_scenes(
                             f.write(image_data)
                         image_paths.append(image_path)
 
+                        
+
+
                         # 发送 'scene' 事件，数据结构与你同事版本前端期望一致
+
                         yield f"data: {json.dumps({'type': 'scene', 'index': i, 'description': chinese_description, 'image_url': image_url})}\n\n"
                         done = True
                         if not progress_task.done(): progress_task.cancel()
@@ -393,7 +500,6 @@ async def generate_scenes(
                 logger.error(error_msg)
                 yield f"data: {json.dumps({'type': 'scene_error', 'index': i, 'message': str(e)})}\n\n"
 
-        # --- 5. 结束信号 (保持不变) ---
         yield f"data: {json.dumps({'type': 'all_images_generated', 'session_id': session_id})}\n\n"
         yield f"data: {json.dumps({'type': 'complete', 'new_credit_balance': current_user.credits})}\n\n"
 
@@ -498,13 +604,13 @@ async def regenerate_image(request: dict):
             logger.info(f"图像提示词生成完成: {image_prompt}")
 
             # 构建最终提示词
-            final_prompt = f"comic style, {image_prompt}, detailed, high quality"
+            final_prompt = f" {image_prompt}, detailed, high quality"
             logger.info(f"最终提示词: {final_prompt}")
 
             # 生成图片，使用传入的steps参数
             image_url = diffusion_service.generate_image_with_style(
                 final_prompt,
-                "comic",
+               
                 steps,  # 使用传入的steps参数
                 7.5,  # guidance_scale
                 512,  # width
@@ -604,4 +710,5 @@ async def create_video(request: dict):
 
 if __name__ == "__main__":
     logger.info("启动服务器...")
-    uvicorn.run(app, host="0.0.0.0", port=8080)
+    uvicorn.run(app, host="localhost", port=8080)
+
