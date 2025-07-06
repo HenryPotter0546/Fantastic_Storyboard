@@ -619,6 +619,7 @@
                                     overallProgressDiv.innerHTML = `已完成 ${progressState.scenesDone}/${progressState.totalScenes}。预计剩余: ${formatTime(avgTimePerScene * remainingScenes)}`;
                                     break;
                                 }
+                                    // 在现有的 case 'all_images_generated': 部分修改如下：
                                 case 'all_images_generated': {
                                     // 保存场景描述到服务器
                                     if (currentSessionId && scenes.length > 0) {
@@ -627,10 +628,22 @@
 
                                     const createVideoBtn = document.createElement('button');
                                     createVideoBtn.textContent = '开始生成视频';
+                                    createVideoBtn.className = 'btn-success';
                                     createVideoBtn.style.marginTop = '20px';
+                                    createVideoBtn.style.fontSize = '16px';
+                                    createVideoBtn.style.padding = '12px 24px';
+
                                     createVideoBtn.onclick = async function () {
+                                        // 显示进度信息
+                                        const progressInfo = document.createElement('div');
+                                        progressInfo.className = 'message-box info';
+                                        progressInfo.style.marginTop = '15px';
+                                        progressInfo.innerHTML = '<span class="loading-spinner"></span>正在生成语音和视频效果，请稍候...';
+                                        createVideoBtn.parentNode.insertBefore(progressInfo, createVideoBtn.nextSibling);
+
                                         createVideoBtn.textContent = '视频生成中...';
                                         createVideoBtn.disabled = true;
+
                                         try {
                                             const response = await fetch('/create-video', {
                                                 method: 'POST',
@@ -640,25 +653,62 @@
                                                 },
                                                 body: JSON.stringify({session_id: data.session_id})
                                             });
+
                                             const result = await response.json();
+
                                             if (result.success) {
+                                                progressInfo.remove();
+
+                                                // 创建视频链接容器
+                                                const videoContainer = document.createElement('div');
+                                                videoContainer.style.marginTop = '20px';
+                                                videoContainer.style.padding = '20px';
+                                                videoContainer.style.border = '2px solid #28a745';
+                                                videoContainer.style.borderRadius = '8px';
+                                                videoContainer.style.backgroundColor = '#f8fff9';
+                                                videoContainer.style.textAlign = 'center';
+
+                                                const successMessage = document.createElement('p');
+                                                successMessage.textContent = '🎉 视频生成成功！包含语音解说和动态效果';
+                                                successMessage.style.color = '#28a745';
+                                                successMessage.style.fontWeight = 'bold';
+                                                successMessage.style.marginBottom = '15px';
+
                                                 const videoLink = document.createElement('a');
                                                 videoLink.href = result.video_url;
-                                                videoLink.textContent = '观看生成的视频';
+                                                videoLink.textContent = '🎬 观看生成的视频';
                                                 videoLink.target = '_blank';
-                                                videoLink.style.display = 'block';
-                                                videoLink.style.marginTop = '20px';
-                                                videoLink.style.fontSize = '18px';
+                                                videoLink.style.display = 'inline-block';
+                                                videoLink.style.padding = '12px 24px';
+                                                videoLink.style.backgroundColor = '#007bff';
+                                                videoLink.style.color = 'white';
+                                                videoLink.style.textDecoration = 'none';
+                                                videoLink.style.borderRadius = '6px';
+                                                videoLink.style.fontSize = '16px';
                                                 videoLink.style.fontWeight = 'bold';
-                                                createVideoBtn.replaceWith(videoLink);
+                                                videoLink.style.transition = 'background-color 0.2s';
+
+                                                videoLink.onmouseover = function () {
+                                                    this.style.backgroundColor = '#0056b3';
+                                                };
+                                                videoLink.onmouseout = function () {
+                                                    this.style.backgroundColor = '#007bff';
+                                                };
+
+                                                videoContainer.appendChild(successMessage);
+                                                videoContainer.appendChild(videoLink);
+                                                createVideoBtn.replaceWith(videoContainer);
+
                                             } else {
-                                                alert('视频生成失败: ' + result.message);
-                                                createVideoBtn.textContent = '开始生成视频';
+                                                progressInfo.className = 'message-box error';
+                                                progressInfo.innerHTML = '❌ 视频生成失败: ' + result.message;
+                                                createVideoBtn.textContent = '重新生成视频';
                                                 createVideoBtn.disabled = false;
                                             }
                                         } catch (error) {
-                                            alert('视频生成请求失败: ' + error.message);
-                                            createVideoBtn.textContent = '开始生成视频';
+                                            progressInfo.className = 'message-box error';
+                                            progressInfo.innerHTML = '❌ 视频生成请求失败: ' + error.message;
+                                            createVideoBtn.textContent = '重新生成视频';
                                             createVideoBtn.disabled = false;
                                         }
                                     };
