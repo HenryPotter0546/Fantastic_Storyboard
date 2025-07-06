@@ -556,9 +556,15 @@ async def get_video_page():
     return FileResponse("templates/video.html")
 
 
+from service.video_service import VideoService
+
+# 在你的main.py文件中添加VideoService实例
+video_service = VideoService()
+
+
 @app.post("/create-video")
 async def create_video(request: dict):
-    """根据会话ID创建视频"""
+    """根据会话ID创建带语音的视频"""
     try:
         session_id = request.get("session_id")
         if not session_id:
@@ -570,10 +576,29 @@ async def create_video(request: dict):
         if not os.path.exists(temp_dir):
             raise HTTPException(status_code=404, detail="Session not found")
 
+        # 获取图片路径
         image_paths = sorted([os.path.join(temp_dir, f) for f in os.listdir(temp_dir) if f.endswith(".png")])
 
         if not image_paths:
             raise HTTPException(status_code=400, detail="No images found for this session")
+
+        # 读取场景描述
+        txt_file_path = os.path.join("temptxt", f"{session_id}.txt")
+        scene_descriptions = []
+
+        if os.path.exists(txt_file_path):
+            with open(txt_file_path, 'r', encoding='utf-8') as f:
+                scene_descriptions = [line.strip() for line in f.readlines() if line.strip()]
+
+        if not scene_descriptions:
+            raise HTTPException(status_code=400, detail="No scene descriptions found")
+
+        if len(image_paths) != len(scene_descriptions):
+            logger.warning(f"图片数量({len(image_paths)})与描述数量({len(scene_descriptions)})不匹配")
+            # 调整到较小的数量
+            min_count = min(len(image_paths), len(scene_descriptions))
+            image_paths = image_paths[:min_count]
+            scene_descriptions = scene_descriptions[:min_count]
 
         # 生成视频
         video_output_dir = os.path.join("static", "videos")
@@ -581,16 +606,19 @@ async def create_video(request: dict):
             os.makedirs(video_output_dir)
 
         video_path = os.path.join(video_output_dir, f"{session_id}.mp4")
-        diffusion_service.create_video_from_images(image_paths, video_path)
+
+        # 使用新的视频服务创建带语音的视频
+        video_service.create_video_from_images_with_audio(
+            image_paths, scene_descriptions, video_path, session_id
+        )
+
         logger.info(f"视频生成成功: {video_path}")
 
-        # 清理临时文件
+        # 清理临时图片文件
         shutil.rmtree(temp_dir)
         logger.info(f"已清理临时目录: {temp_dir}")
 
-        # 注意：不删除txt文件，保留用于后续查看
-        # txt文件路径: temptxt/{session_id}.txt
-        txt_file_path = os.path.join("temptxt", f"{session_id}.txt")
+        # 保留场景描述文件
         if os.path.exists(txt_file_path):
             logger.info(f"场景描述文件保留在: {txt_file_path}")
 
