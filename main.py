@@ -551,7 +551,7 @@ async def regenerate_image(request: dict):
         description = request.get("description")
         scene_index = request.get("sceneIndex")
         steps = request.get("steps", 30)
-        session_id = request.get("session_id")
+        session_id = request.get("session_id")  # 新增：获取session_id
 
         logger.info(f"收到重新生成图片请求: scene_index={scene_index}, description={description}, steps={steps}, session_id={session_id}")
 
@@ -572,20 +572,23 @@ async def regenerate_image(request: dict):
                 "message": "模型未加载，请先加载模型"
             }
 
-        # 检查是否有正在进行的生成任务
+        # 【修改6】检查是否有正在进行的生成任务
         if current_generation_task and not current_generation_task.done():
             logger.info("检测到正在进行的图片生成任务，将在当前图片完成后进行重新生成...")
+            # 存储重新生成请求，等待当前任务完成
             pending_regeneration_request = {
                 "description": description,
                 "scene_index": scene_index,
                 "steps": steps,
-                "session_id": session_id
+                "session_id": session_id  # 新增：存储session_id
             }
 
+            # 等待当前任务完成
             logger.info("等待当前生成任务完成...")
             await current_generation_task
             logger.info("当前生成任务已完成，开始处理重新生成请求")
 
+            # 清空待处理请求标记
             pending_regeneration_request = None
 
         try:
@@ -593,33 +596,35 @@ async def regenerate_image(request: dict):
             deepseek = DeepSeekService()
 
             # 将中文描述翻译成英文
-            english_prompt = await deepseek.translate_to_english(description)  # 确保这里也有 await
+            english_prompt = deepseek.translate_to_english(description)
             logger.info(f"翻译完成: {english_prompt}")
 
             # 转换为适合图像生成的提示词
-            image_prompt = await deepseek.convert_to_image_prompt(english_prompt)  # 添加 await
+            image_prompt = deepseek.convert_to_image_prompt(english_prompt)
             logger.info(f"图像提示词生成完成: {image_prompt}")
 
             # 构建最终提示词
-            final_prompt = f"{image_prompt}, detailed, high quality"  # 移除开头的空格
+            final_prompt = f" {image_prompt}, detailed, high quality"
             logger.info(f"最终提示词: {final_prompt}")
 
             # 生成图片，使用传入的steps参数
             image_url = diffusion_service.generate_image_with_style(
                 final_prompt,
-                "comic",
-                steps,
-                7.5,
-                512,
-                512
+               
+                steps,  # 使用传入的steps参数
+                7.5,  # guidance_scale
+                512,  # width
+                512  # height
             )
 
-            # 如果提供了session_id，则保存图片到对应目录
+            # 新增：如果提供了session_id，则保存图片到对应目录
             if session_id:
                 try:
                     temp_dir = os.path.join("temp", session_id)
                     if os.path.exists(temp_dir):
+                        # 解码base64图片数据
                         image_data = base64.b64decode(image_url.split(',')[1])
+                        # 覆盖原有图片文件
                         image_path = os.path.join(temp_dir, f"scene_{scene_index + 1}.png")
                         with open(image_path, "wb") as f:
                             f.write(image_data)
@@ -628,6 +633,7 @@ async def regenerate_image(request: dict):
                         logger.warning(f"临时目录不存在: {temp_dir}")
                 except Exception as save_error:
                     logger.error(f"保存重新生成的图片失败: {str(save_error)}")
+                    # 不影响主要流程，继续返回结果
 
             logger.info("重新生成图片完成")
 
