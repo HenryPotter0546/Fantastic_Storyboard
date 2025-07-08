@@ -13,11 +13,10 @@ class DeepSeekService:
         if not self.api_key:
             raise ValueError("未设置 SILICONFLOW_API_KEY 环境变量")
 
-
-        self.api_url = "https://api.siliconflow.cn/v1/chat/completions"
+        self.api_url = "https://api.deepseek.com/v1/chat/completions"
 
         # 创建一个可复用的异步客户端实例
-        self.client = httpx.AsyncClient(timeout=60.0)
+        self.client = httpx.AsyncClient(timeout=120.0)
 
     async def translate_to_english(self, text: str) -> str:
         """将中文文本翻译成英文"""
@@ -37,7 +36,7 @@ class DeepSeekService:
         }
 
         data = {
-            "model": "Qwen/QwQ-32B",
+            "model": "deepseek-chat",
             "messages": [
                 {
                     "role": "system",
@@ -107,7 +106,7 @@ class DeepSeekService:
         }
 
         data = {
-            "model": "Qwen/QwQ-32B",
+            "model": "deepseek-chat",
             "messages": [
                 {
                     "role": "system",
@@ -200,7 +199,7 @@ class DeepSeekService:
         }
 
         data = {
-            "model": "Qwen/QwQ-32B",
+            "model": "deepseek-chat",
             "messages": [
                 {
                     "role": "system",
@@ -267,7 +266,7 @@ class DeepSeekService:
             "Content-Type": "application/json"
         }
         data = {
-            "model": "Qwen/QwQ-32B",
+            "model": "deepseek-chat",
             "messages": [
                 {
                     "role": "system",
@@ -336,7 +335,7 @@ class DeepSeekService:
         }
 
         data = {
-            "model": "Qwen/QwQ-32B",
+            "model": "deepseek-chat",
             "messages": [
                 {
                     "role": "system",

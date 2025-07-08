@@ -103,7 +103,7 @@ class VideoService:
             probe = ffmpeg.probe(output_path)
             duration = float(probe['streams'][0]['duration'])
 
-            logger.info(f"语音生成成功: {output_path}, 时长: {duration:.2f}秒")
+            logger.info(f"语音生成成功: {output_path}, 时长: {duration:.3f}秒")
             return duration
 
         except Exception as e:
@@ -214,7 +214,7 @@ class VideoService:
                     .run(quiet=True)
                 )
 
-            logger.info(f"动态效果视频生成成功: {output_path}, 效果类型: {effect_type}, 时长: {duration:.2f}秒")
+            logger.info(f"动态效果视频生成成功: {output_path}, 效果类型: {effect_type}, 时长: {duration:.3f}秒")
 
         except Exception as e:
             logger.error(f"创建动态效果失败: {str(e)}")
@@ -235,7 +235,7 @@ class VideoService:
                 .overwrite_output()
                 .run(quiet=True)
             )
-            logger.info(f"静态视频生成成功: {output_path}, 时长: {duration:.2f}秒")
+            logger.info(f"静态视频生成成功: {output_path}, 时长: {duration:.3f}秒")
         except Exception as e:
             logger.error(f"创建静态视频失败: {str(e)}")
             raise
@@ -300,6 +300,16 @@ class VideoService:
 
         return sorted_paths
 
+    def get_actual_video_duration(self, video_path: str) -> float:
+        """获取视频实际时长"""
+        try:
+            probe = ffmpeg.probe(video_path)
+            duration = float(probe['streams'][0]['duration'])
+            return duration
+        except Exception as e:
+            logger.warning(f"无法获取视频时长 {video_path}: {str(e)}")
+            return 0.0
+
     def create_video_from_images_with_audio(self, image_paths: List[str], scene_descriptions: List[str],
                                             output_path: str, session_id: str):
         """
@@ -336,76 +346,94 @@ class VideoService:
             video_clips = []
             audio_clips = []
             all_subtitles = []
-            current_time = 0.0
 
-            # 为每个场景生成语音和动态视频
+            # 第一阶段：生成所有音频文件并获取实际时长
+            audio_durations = []
+            scene_info_list = []
+
+            logger.info("第一阶段：生成音频文件...")
             for i, (image_path, description) in enumerate(zip(sorted_image_paths, scene_descriptions)):
                 scene_num = i + 1
-                logger.info(f"处理场景 {scene_num}/{len(sorted_image_paths)}")
-                logger.info(f"  图片: {os.path.basename(image_path)}")
-                logger.info(f"  描述: {description[:50]}...")
-
-                # 清理场景描述并分割字幕
-                clean_description = self.clean_scene_description(description)
-                scene_subtitles = self.split_text_for_subtitles(clean_description)
+                logger.info(f"生成音频 {scene_num}/{len(sorted_image_paths)}")
 
                 # 生成语音
                 audio_path = os.path.join(temp_audio_dir, f"scene_{scene_num}.wav")
                 audio_duration = self.text_to_speech(description, audio_path)
 
-                # 视频时长 = 语音时长 + 0.2秒（减少额外时间以降低延迟）
-                video_duration = audio_duration + 0.2
+                # 验证音频实际时长
+                actual_audio_duration = self.get_actual_video_duration(audio_path)
+                if actual_audio_duration > 0:
+                    audio_duration = actual_audio_duration
 
-                logger.info(f"场景 {scene_num} 音频时长: {audio_duration:.2f}秒, 视频时长: {video_duration:.2f}秒")
+                audio_durations.append(audio_duration)
+                audio_clips.append(audio_path)
 
-                # 为当前场景计算字幕时间（改进时间同步）
+                logger.info(f"音频 {scene_num} 时长: {audio_duration:.3f}秒")
+
+            # 第二阶段：基于实际音频时长计算准确的时间轴
+            cumulative_time = 0.0
+
+            logger.info("第二阶段：计算时间轴并生成视频...")
+            for i, (image_path, description) in enumerate(zip(sorted_image_paths, scene_descriptions)):
+                scene_num = i + 1
+                audio_duration = audio_durations[i]
+
+                # 计算场景开始时间
+                scene_start_time = cumulative_time
+                scene_end_time = cumulative_time + audio_duration
+
+                logger.info(
+                    f"场景 {scene_num}: {scene_start_time:.3f}s - {scene_end_time:.3f}s (时长: {audio_duration:.3f}s)")
+
+                # 处理字幕
+                clean_description = self.clean_scene_description(description)
+                scene_subtitles = self.split_text_for_subtitles(clean_description)
+
                 if scene_subtitles:
-                    # 字幕开始时间提前0.1秒，减少延迟感知
-                    subtitle_start_offset = max(0, current_time - 0.1)
                     subtitle_duration_per_segment = audio_duration / len(scene_subtitles)
 
                     for j, subtitle_text in enumerate(scene_subtitles):
-                        start_time = subtitle_start_offset + j * subtitle_duration_per_segment
-                        end_time = subtitle_start_offset + (j + 1) * subtitle_duration_per_segment
+                        subtitle_start = scene_start_time + j * subtitle_duration_per_segment
+                        subtitle_end = scene_start_time + (j + 1) * subtitle_duration_per_segment
 
-                        # 确保字幕不会超出当前场景的时间范围
-                        end_time = min(end_time, current_time + audio_duration)
+                        # 确保最后一个字幕不超出音频时长
+                        if j == len(scene_subtitles) - 1:
+                            subtitle_end = scene_end_time
 
                         all_subtitles.append({
                             "text": subtitle_text,
-                            "start": start_time,
-                            "end": end_time
+                            "start": subtitle_start,
+                            "end": subtitle_end
                         })
 
-                current_time += video_duration
+                        logger.info(f"  字幕 {j + 1}: '{subtitle_text}' ({subtitle_start:.3f}s - {subtitle_end:.3f}s)")
 
-                # 生成带动态效果的视频片段
+                # 生成视频片段 - 使用精确的音频时长
                 video_clip_path = os.path.join(temp_video_dir, f"scene_{scene_num}.mp4")
-                self.create_image_with_effect(image_path, video_clip_path, video_duration,
+                self.create_image_with_effect(image_path, video_clip_path, audio_duration,
                                               target_width, target_height)
 
+                # 验证生成的视频时长
+                actual_video_duration = self.get_actual_video_duration(video_clip_path)
+                if actual_video_duration > 0:
+                    duration_diff = abs(actual_video_duration - audio_duration)
+                    if duration_diff > 0.1:
+                        logger.warning(
+                            f"场景 {scene_num} 视频时长偏差: 音频 {audio_duration:.3f}s, 视频 {actual_video_duration:.3f}s")
+
                 video_clips.append(video_clip_path)
-                audio_clips.append(audio_path)
 
-            # 验证生成的视频片段时长
-            total_expected_duration = 0
-            for i, video_clip in enumerate(video_clips):
-                try:
-                    probe = ffmpeg.probe(video_clip)
-                    actual_duration = float(probe['streams'][0]['duration'])
-                    total_expected_duration += actual_duration
-                    logger.info(f"视频片段 {i + 1} 实际时长: {actual_duration:.2f}秒")
-                except Exception as e:
-                    logger.warning(f"无法获取视频片段 {i + 1} 的时长: {str(e)}")
+                # 更新累计时间 - 使用音频的实际时长
+                cumulative_time += audio_duration
 
-            logger.info(f"预计总视频时长: {total_expected_duration:.2f}秒 ({total_expected_duration / 60:.2f}分钟)")
+            logger.info(f"预计总时长: {cumulative_time:.3f}秒 ({cumulative_time / 60:.2f}分钟)")
 
             # 创建字幕文件
             subtitle_path = os.path.join(temp_subtitle_dir, "subtitles.srt")
             self.create_subtitle_file(all_subtitles, subtitle_path)
 
             # 合并所有视频片段
-            logger.info("开始合并视频片段...")
+            logger.info("合并视频片段...")
 
             # 创建输入文件列表文件
             concat_file_path = os.path.join(temp_video_dir, "concat_list.txt")
@@ -425,21 +453,27 @@ class VideoService:
                 .run(quiet=True)
             )
 
-            # 合并音频
+            # 合并音频 - 使用concat滤镜确保时间连续性
             temp_audio_output = os.path.join(temp_audio_dir, "merged_audio.wav")
-            audio_inputs = [ffmpeg.input(audio_clip) for audio_clip in audio_clips]
 
-            if len(audio_inputs) == 1:
-                final_audio = audio_inputs[0]
+            if len(audio_clips) == 1:
+                # 只有一个音频文件，直接复制
+                import shutil
+                shutil.copy2(audio_clips[0], temp_audio_output)
             else:
+                # 多个音频文件，使用concat滤镜
+                audio_inputs = [ffmpeg.input(audio_clip) for audio_clip in audio_clips]
                 final_audio = ffmpeg.concat(*audio_inputs, v=0, a=1)
+                (
+                    final_audio
+                    .output(temp_audio_output)
+                    .overwrite_output()
+                    .run(quiet=True)
+                )
 
-            (
-                final_audio
-                .output(temp_audio_output)
-                .overwrite_output()
-                .run(quiet=True)
-            )
+            # 验证合并后的音频时长
+            merged_audio_duration = self.get_actual_video_duration(temp_audio_output)
+            logger.info(f"合并后音频时长: {merged_audio_duration:.3f}秒")
 
             # 确保输出目录存在
             output_dir = os.path.dirname(output_path)
@@ -454,7 +488,7 @@ class VideoService:
             video_input = ffmpeg.input(temp_video_output)
             audio_input = ffmpeg.input(temp_audio_output)
 
-            # 添加字幕到视频（调整字幕样式以减少视觉延迟）
+            # 添加字幕到视频
             video_with_subtitles = video_input.filter('subtitles', subtitle_path,
                                                       force_style='FontSize=24,PrimaryColour=&Hffffff,BackColour=&H80000000,BorderStyle=3,MarginV=50')
 
@@ -471,15 +505,14 @@ class VideoService:
                 )
 
                 # 获取视频总时长
-                probe = ffmpeg.probe(temp_output_path)
-                video_duration_total = float(probe['streams'][0]['duration'])
-                logger.info(f"最终视频总时长: {video_duration_total:.2f}秒 ({video_duration_total / 60:.2f}分钟)")
+                final_video_duration = self.get_actual_video_duration(temp_output_path)
+                logger.info(f"最终视频总时长: {final_video_duration:.3f}秒 ({final_video_duration / 60:.2f}分钟)")
 
                 # 添加BGM
                 final_video_input = ffmpeg.input(temp_output_path)
-                bgm_input = ffmpeg.input(bgm_path, stream_loop=-1, t=video_duration_total)
+                bgm_input = ffmpeg.input(bgm_path, stream_loop=-1, t=final_video_duration)
 
-                # 混合原音频和BGM（BGM音量设为0.3）
+                # 混合原音频和BGM（BGM音量设为0.1）
                 mixed_audio = ffmpeg.filter([final_video_input.audio, bgm_input], 'amix',
                                             inputs=2, duration='first', weights='1.0 0.3')
 
@@ -508,9 +541,8 @@ class VideoService:
 
             # 验证最终输出视频的时长
             try:
-                final_probe = ffmpeg.probe(output_path)
-                final_duration = float(final_probe['streams'][0]['duration'])
-                logger.info(f"最终输出视频时长: {final_duration:.2f}秒 ({final_duration / 60:.2f}分钟)")
+                final_duration = self.get_actual_video_duration(output_path)
+                logger.info(f"最终输出视频时长: {final_duration:.3f}秒 ({final_duration / 60:.2f}分钟)")
             except Exception as e:
                 logger.warning(f"无法获取最终视频时长: {str(e)}")
 
