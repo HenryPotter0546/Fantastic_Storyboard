@@ -4,6 +4,41 @@
     <meta charset="UTF-8">
     <title>漫画生成页面</title>
     <style>
+        /* 新增任务状态样式 */
+        .task-status-container {
+            margin-bottom: 20px;
+            padding: 15px;
+            border-radius: 8px;
+            background-color: #f8f9fa;
+            border: 1px solid #e9ecef;
+        }
+        
+        .progress-container {
+            margin-top: 10px;
+        }
+        
+        .progress-bar {
+            height: 20px;
+            background-color: #e9ecef;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background-color: #007bff;
+            transition: width 0.3s ease;
+            text-align: center;
+            color: white;
+            font-size: 12px;
+            line-height: 20px;
+        }
+        
+        .queue-info {
+            margin-top: 10px;
+            font-size: 14px;
+            color: #6c757d;
+        }
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             margin: 40px;
@@ -278,7 +313,22 @@
         <h1>漫画生成页面</h1>
         <button class="back-btn" onclick="goBack()">返回首页</button>
     </div>
+      <div id="taskStatusArea" class="task-status-container">
+        <h3>任务状态</h3>
+        <div id="taskStatusMessage">正在获取任务状态...</div>
+        <div class="progress-container">
+            <div class="progress-bar">
+                <div class="progress-fill" id="taskProgressBar" style="width: 0%">0%</div>
+            </div>
+        </div>
+        <div id="queuePosition" class="queue-info"></div>
+    </div>
 
+    <!-- 结果区域（初始隐藏） -->
+    <div id="result" style="display: none;">
+        <!-- 这里将显示生成结果 -->
+    </div>
+    </div>
     <div class="global-actions">
         <div class="model-controls">
             <span>当前模型:</span>
@@ -305,13 +355,254 @@
 </div>
 
 <script>
-    const token = localStorage.getItem('accessToken');
-    let scenes = [];
+    
+ 
     let currentModel = null;
     let isGenerating = false;
     let currentUser = null;
     let currentSessionId = null; // 新增：用于存储当前会话ID
+      const urlParams = new URLSearchParams(window.location.search);
+    const taskId = urlParams.get('task_id');
+    const token = localStorage.getItem('accessToken');
+    
+    // 全局状态
+    let scenes = [];
+    let sessionId = null;
+    // 页面加载后执行
+window.addEventListener('load', async function() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const taskId = urlParams.get('task_id');
+    
+    if (!taskId) {
+        // 显示错误信息并添加返回按钮
+        document.getElementById('taskStatusMessage').textContent = '参数丢失，请返回首页重新开始！';
+        document.getElementById('queuePosition').innerHTML = '<button onclick="goBack()" style="margin-top: 10px;">返回首页</button>';
+        return;
+    }
+    
+    // 开始轮询任务状态
+    pollTaskStatus(taskId);
+});
+    function goBack() {
+    // 清除可能的临时存储
+    sessionStorage.removeItem('current_task_id');
+    // 返回首页
+    window.location.href = '/';
+}
+    async function pollTaskStatus(taskId) {
+        try {
+            const response = await fetch(`/tasks/task-status/${taskId}`, {
+                headers: {'Authorization': `Bearer ${token}`}
+            });
+            
+            if (!response.ok) {
+                throw new Error(`请求失败: ${response.status}`);
+            }
+            
+            const status = await response.json();
+            
+            // 更新任务状态显示
+            document.getElementById('taskStatusMessage').textContent = status.message;
+            document.getElementById('taskProgressBar').style.width = `${status.progress}%`;
+            document.getElementById('taskProgressBar').textContent = `${status.progress}%`;
+            
+            if (status.status === 'queued') {
+                document.getElementById('queuePosition').textContent = `当前排队位置: ${status.position}`;
+            } else {
+                document.getElementById('queuePosition').textContent = '';
+            }
+            
+            // 处理不同状态
+            if (status.status === 'completed') {
+                // 处理完成的任务结果
+                processTaskResult(status.result);
+            } else if (status.status === 'failed') {
+                document.getElementById('taskStatusMessage').textContent = '任务失败: ' + status.message;
+                // 添加重试按钮
+                document.getElementById('queuePosition').innerHTML = '<button onclick="goBack()">返回重试</button>';
+            } else if (status.status === 'running' || status.status === 'queued') {
+                // 继续轮询
+                setTimeout(() => pollTaskStatus(taskId), 2000);
+            }
+        } catch (error) {
+            console.error('获取任务状态失败:', error);
+            document.getElementById('taskStatusMessage').textContent = '获取任务状态失败: ' + error.message;
+            // 重试
+            setTimeout(() => pollTaskStatus(taskId), 3000);
+        }
+    }
 
+    function processTaskResult(results) {
+        // 隐藏任务状态区域，显示结果区域
+        document.getElementById('taskStatusArea').style.display = 'none';
+        document.getElementById('result').style.display = 'block';
+        
+        // 处理每个结果项
+        results.forEach(result => {
+            switch (result.type) {
+                case 'start':
+                    // 处理开始事件
+                    handleStartEvent(result);
+                    break;
+                case 'scene':
+                    // 创建场景显示
+                    createSceneElement(result.index, result.description, result.image_url);
+                    break;
+                case 'all_images_generated':
+                    // 保存sessionId
+                    sessionId = result.session_id;
+                    break;
+                case 'complete':
+                    // 显示完成消息
+                    showCompletionMessage(result.new_credit_balance);
+                    break;
+                case 'error':
+                    // 显示错误消息
+                    showErrorMessage(result.message);
+                    break;
+            }
+        });
+    }
+
+    function handleStartEvent(data) {
+        // 创建场景占位符
+        const resultDiv = document.getElementById('result');
+        resultDiv.innerHTML = '';
+        
+        scenes = data.scenes || [];
+        sessionId = data.session_id;
+        
+        for (let i = 0; i < data.total_scenes; i++) {
+            const sceneDiv = document.createElement('div');
+            sceneDiv.className = 'scene';
+            sceneDiv.id = `scene-${i}`;
+            sceneDiv.innerHTML = `
+                <h3>场景 ${i + 1}</h3>
+                <div class="scene-content">
+                    <div class="description-area">
+                        <div class="description-display" id="desc-${i}">${scenes[i] || '<i style="color: #888;">等待生成...</i>'}</div>
+                        <textarea class="description-edit" id="edit-${i}" style="display: none;">${scenes[i] || ''}</textarea>
+                        <div class="scene-actions">
+                            <button onclick="editDescription(${i})" id="edit-btn-${i}">编辑</button>
+                            <button onclick="saveDescription(${i})" id="save-btn-${i}" style="display: none;">保存</button>
+                            <button onclick="cancelEdit(${i})" id="cancel-btn-${i}" style="display: none;">取消</button>
+                            <button onclick="regenerateImage(${i})" id="regen-btn-${i}" style="display: none;">重新生成</button>
+                        </div>
+                    </div>
+                    <div class="image-area">
+                        <div class="progress-bar-container" id="progress-container-${i}">
+                            <div class="progress-bar" id="progress-bar-${i}">等待中...</div>
+                        </div>
+                        <div class="image-container" id="image-container-${i}" style="display:none;">
+                            <img src="" alt="场景 ${i + 1}">
+                        </div>
+                    </div>
+                </div>
+            `;
+            resultDiv.appendChild(sceneDiv);
+        }
+    }
+
+    function createSceneElement(index, description, imageUrl) {
+        const sceneDiv = document.getElementById(`scene-${index}`);
+        if (!sceneDiv) return;
+        
+        // 更新描述
+        const descElement = document.getElementById(`desc-${index}`);
+        if (descElement) {
+            descElement.textContent = description;
+            scenes[index] = description;
+        }
+        
+        // 隐藏进度条，显示图片
+        const progressContainer = document.getElementById(`progress-container-${index}`);
+        const imageContainer = document.getElementById(`image-container-${index}`);
+        const imageElement = imageContainer.querySelector('img');
+        
+        if (progressContainer) progressContainer.style.display = 'none';
+        if (imageContainer) imageContainer.style.display = 'block';
+        if (imageElement) imageElement.src = imageUrl;
+        
+        // 显示重新生成按钮
+        const regenBtn = document.getElementById(`regen-btn-${index}`);
+        if (regenBtn) regenBtn.style.display = 'inline-block';
+    }
+
+    function showCompletionMessage(newCreditBalance) {
+        // 更新用户积分显示
+        const userInfo = document.getElementById('userInfoText');
+        if (userInfo) {
+            userInfo.textContent = `用户: ${currentUser.username} | 剩余积分: ${newCreditBalance}`;
+        }
+        
+        // 添加创建视频按钮
+        if (sessionId) {
+            const createVideoBtn = document.createElement('button');
+            createVideoBtn.textContent = '开始生成视频';
+            createVideoBtn.style.marginTop = '20px';
+            createVideoBtn.onclick = createVideo;
+            document.getElementById('result').appendChild(createVideoBtn);
+        }
+    }
+
+    function showErrorMessage(message) {
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'message-box error';
+        errorDiv.textContent = message;
+        document.getElementById('result').appendChild(errorDiv);
+    }
+
+    async function createVideo() {
+        if (!sessionId) return;
+        
+        const btn = document.querySelector('button[onclick="createVideo"]');
+        if (btn) {
+            btn.textContent = '视频生成中...';
+            btn.disabled = true;
+        }
+        
+        try {
+            const response = await fetch('/create-video', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({session_id: sessionId})
+            });
+            
+            const result = await response.json();
+            if (result.success) {
+                // 创建视频链接
+                const videoLink = document.createElement('a');
+                videoLink.href = result.video_url;
+                videoLink.textContent = '观看生成的视频';
+                videoLink.target = '_blank';
+                videoLink.style.display = 'block';
+                videoLink.style.marginTop = '20px';
+                videoLink.style.fontSize = '18px';
+                videoLink.style.fontWeight = 'bold';
+                
+                if (btn) {
+                    btn.replaceWith(videoLink);
+                } else {
+                    document.getElementById('result').appendChild(videoLink);
+                }
+            } else {
+                alert('视频生成失败: ' + (result.message || '未知错误'));
+                if (btn) {
+                    btn.textContent = '开始生成视频';
+                    btn.disabled = false;
+                }
+            }
+        } catch (error) {
+            alert('视频生成请求失败: ' + error.message);
+            if (btn) {
+                btn.textContent = '开始生成视频';
+                btn.disabled = false;
+            }
+        }
+    }
     window.addEventListener('load', async function () {
         if (!token) {
             window.location.href = '/login?session=expired';
@@ -619,6 +910,7 @@
                                     overallProgressDiv.innerHTML = `已完成 ${progressState.scenesDone}/${progressState.totalScenes}。预计剩余: ${formatTime(avgTimePerScene * remainingScenes)}`;
                                     break;
                                 }
+                                    // 在现有的 case 'all_images_generated': 部分修改如下：
                                 case 'all_images_generated': {
                                     // 保存场景描述到服务器
                                     if (currentSessionId && scenes.length > 0) {
@@ -627,10 +919,22 @@
 
                                     const createVideoBtn = document.createElement('button');
                                     createVideoBtn.textContent = '开始生成视频';
+                                    createVideoBtn.className = 'btn-success';
                                     createVideoBtn.style.marginTop = '20px';
+                                    createVideoBtn.style.fontSize = '16px';
+                                    createVideoBtn.style.padding = '12px 24px';
+
                                     createVideoBtn.onclick = async function () {
+                                        // 显示进度信息
+                                        const progressInfo = document.createElement('div');
+                                        progressInfo.className = 'message-box info';
+                                        progressInfo.style.marginTop = '15px';
+                                        progressInfo.innerHTML = '<span class="loading-spinner"></span>正在生成语音和视频效果，请稍候...';
+                                        createVideoBtn.parentNode.insertBefore(progressInfo, createVideoBtn.nextSibling);
+
                                         createVideoBtn.textContent = '视频生成中...';
                                         createVideoBtn.disabled = true;
+
                                         try {
                                             const response = await fetch('/create-video', {
                                                 method: 'POST',
@@ -640,25 +944,62 @@
                                                 },
                                                 body: JSON.stringify({session_id: data.session_id})
                                             });
+
                                             const result = await response.json();
+
                                             if (result.success) {
+                                                progressInfo.remove();
+
+                                                // 创建视频链接容器
+                                                const videoContainer = document.createElement('div');
+                                                videoContainer.style.marginTop = '20px';
+                                                videoContainer.style.padding = '20px';
+                                                videoContainer.style.border = '2px solid #28a745';
+                                                videoContainer.style.borderRadius = '8px';
+                                                videoContainer.style.backgroundColor = '#f8fff9';
+                                                videoContainer.style.textAlign = 'center';
+
+                                                const successMessage = document.createElement('p');
+                                                successMessage.textContent = '🎉 视频生成成功！包含语音解说和动态效果';
+                                                successMessage.style.color = '#28a745';
+                                                successMessage.style.fontWeight = 'bold';
+                                                successMessage.style.marginBottom = '15px';
+
                                                 const videoLink = document.createElement('a');
                                                 videoLink.href = result.video_url;
-                                                videoLink.textContent = '观看生成的视频';
+                                                videoLink.textContent = '🎬 观看生成的视频';
                                                 videoLink.target = '_blank';
-                                                videoLink.style.display = 'block';
-                                                videoLink.style.marginTop = '20px';
-                                                videoLink.style.fontSize = '18px';
+                                                videoLink.style.display = 'inline-block';
+                                                videoLink.style.padding = '12px 24px';
+                                                videoLink.style.backgroundColor = '#007bff';
+                                                videoLink.style.color = 'white';
+                                                videoLink.style.textDecoration = 'none';
+                                                videoLink.style.borderRadius = '6px';
+                                                videoLink.style.fontSize = '16px';
                                                 videoLink.style.fontWeight = 'bold';
-                                                createVideoBtn.replaceWith(videoLink);
+                                                videoLink.style.transition = 'background-color 0.2s';
+
+                                                videoLink.onmouseover = function () {
+                                                    this.style.backgroundColor = '#0056b3';
+                                                };
+                                                videoLink.onmouseout = function () {
+                                                    this.style.backgroundColor = '#007bff';
+                                                };
+
+                                                videoContainer.appendChild(successMessage);
+                                                videoContainer.appendChild(videoLink);
+                                                createVideoBtn.replaceWith(videoContainer);
+
                                             } else {
-                                                alert('视频生成失败: ' + result.message);
-                                                createVideoBtn.textContent = '开始生成视频';
+                                                progressInfo.className = 'message-box error';
+                                                progressInfo.innerHTML = '❌ 视频生成失败: ' + result.message;
+                                                createVideoBtn.textContent = '重新生成视频';
                                                 createVideoBtn.disabled = false;
                                             }
                                         } catch (error) {
-                                            alert('视频生成请求失败: ' + error.message);
-                                            createVideoBtn.textContent = '开始生成视频';
+                                            progressInfo.className = 'message-box error';
+                                            progressInfo.innerHTML = '❌ 视频生成请求失败: ' + error.message;
+                                            createVideoBtn.textContent = '重新生成视频';
                                             createVideoBtn.disabled = false;
                                         }
                                     };
