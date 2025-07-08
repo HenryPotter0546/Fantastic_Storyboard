@@ -1,34 +1,94 @@
-    <html>
-        <head>
-            <title>视频播放</title>
-            <style>
-                body { font-family: Arial, sans-serif; margin: 40px; text-align: center; }
-                video { max-width: 80%; border: 2px solid #ddd; border-radius: 8px; }
-                h1 { color: #333; }
-                a { color: #4CAF50; text-decoration: none; font-size: 18px; }
-            </style>
-        </head>
-        <body>
-            <h1>生成的漫画视频</h1>
-            <video id="videoPlayer" controls autoplay>
-                <source src="" type="video/mp4">
-                你的浏览器不支持视频播放
-            </video>
-            <br>
-            <a href="/">返回首页</a>
-            
-            <script>
-                window.onload = function() {
-                    const urlParams = new URLSearchParams(window.location.search);
-                    const videoUrl = urlParams.get('video_url');
-                    
-                    if (videoUrl) {
-                        const videoPlayer = document.getElementById('videoPlayer');
-                        const source = videoPlayer.getElementsByTagName('source')[0];
-                        source.src = videoUrl;
-                        videoPlayer.load();
-                    }
-                };
-            </script>
-        </body>
-    </html> 
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <title>生成的漫画视频</title>
+    <style>
+        @font-face {
+            font-family: 'zpix';
+            src: url('https://cdn.jsdelivr.net/gh/SolidZORO/zpix-pixel-font@master/dist/zpix.woff2') format('woff2'),
+                 url('https://cdn.jsdelivr.net/gh/SolidZORO/zpix-pixel-font@master/dist/zpix.woff') format('woff'),
+                 url('https://cdn.jsdelivr.net/gh/SolidZORO/zpix-pixel-font@master/dist/zpix.ttf') format('truetype');
+            font-weight: normal;
+            font-style: normal;
+        }
+
+        /* 全局像素风字体和背景 */
+        body {
+            font-family: 'zpix', monospace;
+            margin: 40px;
+            background-color: #f7f7f7;
+            color: #2c2c2c;
+            text-align: center;
+            background-image:
+                radial-gradient(circle at 1px 1px, rgba(0,0,0,.15) 1px, transparent 0);
+            background-size: 20px 20px;
+            line-height: 1.8;
+            user-select: none;
+        }
+
+        h1 {
+            font-size: 28px;
+            margin-bottom: 24px;
+            color: #2c2c2c;
+            text-shadow: 2px 2px 0 #e0e0e0;
+        }
+
+        video {
+            max-width: 80%;
+            border: 4px solid #333;
+            border-radius: 0;
+            box-shadow: 8px 8px 0 #333;
+            image-rendering: pixelated;
+            background-color: #fafafa;
+        }
+
+        a {
+            display: inline-block;
+            margin-top: 24px;
+            padding: 12px 24px;
+            font-family: 'zpix', monospace;
+            font-size: 16px;
+            color: #28a745;
+            border: 3px solid #333;
+            background-color: #fafafa;
+            text-decoration: none;
+            box-shadow: 4px 4px 0 #1e7e34;
+            transition: all 0.2s;
+            user-select: none;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            border-radius: 0;
+        }
+
+        a:hover {
+            background-color: #28a745;
+            color: #fafafa;
+            box-shadow: 4px 4px 0 #155724;
+        }
+    </style>
+</head>
+<body>
+    <h1>生成的漫画视频</h1>
+    <video id="videoPlayer" controls autoplay>
+        <source src="" type="video/mp4" />
+        你的浏览器不支持视频播放
+    </video>
+    <br />
+    <a href="/">返回首页</a>
+
+    <script>
+        window.onload = function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const videoUrl = urlParams.get('video_url');
+
+            if (videoUrl) {
+                const videoPlayer = document.getElementById('videoPlayer');
+                const source = videoPlayer.getElementsByTagName('source')[0];
+                source.src = videoUrl;
+                videoPlayer.load();
+            }
+        };
+    </script>
+</body>
+</html>

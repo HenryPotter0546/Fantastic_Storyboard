@@ -3,56 +3,111 @@
 <head>
     <meta charset="UTF-8">
     <title>登录 - 小说转漫画服务</title>
+    <!-- NES.css 框架 -->
+    <link href="https://unpkg.com/nes.css@latest/css/nes.min.css" rel="stylesheet" />
+    
     <style>
+        @font-face {
+            font-family: 'zpix';
+            src: url('https://cdn.jsdelivr.net/gh/SolidZORO/zpix-pixel-font@master/dist/zpix.woff2') format('woff2'),
+                 url('https://cdn.jsdelivr.net/gh/SolidZORO/zpix-pixel-font@master/dist/zpix.woff') format('woff'),
+                 url('https://cdn.jsdelivr.net/gh/SolidZORO/zpix-pixel-font@master/dist/zpix.ttf') format('truetype');
+            font-weight: normal;
+            font-style: normal;
+        }
+
+        /* 全局样式 - 电子书墨水屏配色 */
+        * {
+            font-family: 'zpix', 'Courier New', monospace !important;
+        }
+
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            font-family: 'zpix', 'Press Start 2P', monospace;
             margin: 40px;
-            background-color: #f4f4f9;
-            color: #333;
+            background-color: #f7f7f7;
+            color: #2c2c2c;
+            background-image: 
+                radial-gradient(circle at 1px 1px, rgba(0,0,0,.15) 1px, transparent 0);
+            background-size: 20px 20px;
+            line-height: 1.8;
             display: flex;
             align-items: center;
             justify-content: center;
             min-height: 100vh;
         }
 
+        /* 主容器 - 墨水屏风格 */
         .container {
             max-width: 450px;
             width: 100%;
             margin: 0 auto;
-            background-color: #fff;
+            background-color: #fafafa;
+            border: 4px solid #333;
+            box-shadow: 8px 8px 0px #333;
             padding: 40px;
-            border-radius: 12px;
-            box-shadow: 0 4px A12px rgba(0, 0, 0, 0.08);
             text-align: center;
+            position: relative;
         }
 
+        .container::before {
+            content: '';
+            position: absolute;
+            top: 8px;
+            left: 8px;
+            right: 8px;
+            bottom: 8px;
+            border: 2px dashed #666;
+            pointer-events: none;
+        }
+
+        /* 标题样式 */
         h1, h2 {
-            color: #333;
+            color: #2c2c2c;
+            font-size: 20px;
+            text-shadow: 2px 2px 0px #e0e0e0;
+            margin-bottom: 24px;
         }
 
+        /* 输入框样式 - 像素风格 */
         input[type="text"],
         input[type="password"] {
             width: 100%;
-            padding: 12px;
+            padding: 12px 16px;
             margin: 10px 0;
-            border: 1px solid #ddd;
-            border-radius: 8px;
+            background-color: #f5f5f5;
+            border: 3px solid #333;
+            box-shadow: inset 4px 4px 0px #e0e0e0;
+            font-size: 14px;
             box-sizing: border-box;
-            font-size: 16px;
+            color: #2c2c2c;
         }
 
+        input[type="text"]:focus,
+        input[type="password"]:focus {
+            outline: none;
+            border-color: #007bff;
+            box-shadow: inset 4px 4px 0px #cce7ff;
+        }
+
+        input[type="text"]::placeholder,
+        input[type="password"]::placeholder {
+            color: #666;
+        }
+
+        /* 按钮样式 - 使用NES.css类并自定义颜色 */
         button {
             width: 100%;
-            padding: 12px 20px;
+            padding: 12px 16px;
             background-color: #007bff;
-            color: white;
-            border: none;
+            color: #fff;
+            border: 3px solid #333;
             cursor: pointer;
-            border-radius: 8px;
-            font-size: 16px;
+            font-size: 14px;
             font-weight: bold;
-            transition: background-color 0.2s;
             margin-top: 10px;
+            position: relative;
+            text-transform: uppercase;
+            letter-spacing: 1px;
         }
 
         button:hover:not(:disabled) {
@@ -60,51 +115,116 @@
         }
 
         button:disabled {
-            background-color: #cccccc;
+            background-color: #6c757d;
             cursor: not-allowed;
         }
 
+  /* 表单切换区域 */
         .form-switcher {
             margin-top: 20px;
-            font-size: 14px;
+            font-size: 12px;
+            color: #2c2c2c;
         }
         
         .form-switcher a {
             color: #007bff;
             text-decoration: none;
             font-weight: bold;
+            padding: 2px 4px;
+            border: 2px solid transparent;
+            transition: all 0.2s;
         }
 
         .form-switcher a:hover {
-            text-decoration: underline;
+            background-color: #007bff;
+            color: #fff;
+            border-color: #007bff;
         }
-        
+
+        /* 消息框 - 明快配色 */
         #message-box {
             margin-top: 20px;
-            padding: 15px;
-            border: 1px solid;
-            border-radius: 8px;
+            padding: 12px 16px;
+            border: 3px solid;
             text-align: center;
-            display: none; /* Initially hidden */
+            display: none;
+            font-size: 12px;
+            position: relative;
         }
-        .error { color: #721c24; background-color: #f8d7da; border-color: #f5c6cb; }
-        .success { color: #155724; background-color: #d4edda; border-color: #c3e6cb; }
-        
+
+        .error {
+            color: #fff;
+            background-color: #dc3545;
+            border-color: #a71e2a;
+        }
+
+        .success {
+            color: #fff;
+            background-color: #28a745;
+            border-color: #1e7e34;
+        }
+
+        /* 项目标识图片 */
+        .project-logo {
+            max-width: 150px;
+            display: block;
+            margin: 0 auto 20px auto;
+            border: 4px solid #333;
+            box-shadow: 4px 4px 0px #ccc;
+            image-rendering: pixelated;
+        }
+
+        /* 加载动画 - 像素风格 */
+        .loading-spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #fff;
+            animation: spin 1s steps(8, end) infinite;
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* 响应式设计 */
+        @media (max-width: 768px) {
+            body {
+                margin: 20px;
+            }
+            
+            .container {
+                padding: 24px;
+            }
+            
+            h2 {
+                font-size: 18px;
+            }
+        }
+
+        /* 隐藏元素 */
+        .hidden {
+            display: none !important;
+        }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <img src="/static/ThePromisedLand.png" alt="项目标识"
-         style="max-width: 150px; display: block; margin: 0 auto 20px auto; border-radius: 8px;">
+<div class="container nes-container with-title">
+    <p class="title">像素漫画工坊</p>
+    <img src="/static/ThePromisedLand.png" alt="项目标识" class="project-logo">
     
     <!-- 登录表单容器 -->
     <div id="login-container">
         <h2>欢迎回来</h2>
         <form id="loginForm">
-            <input type="text" id="loginUser" placeholder="用户名" required>
-            <input type="password" id="loginPass" placeholder="密码" required>
-            <button type="submit">登录</button>
+            <input type="text" id="loginUser" class="nes-input" placeholder="用户名" required>
+            <input type="password" id="loginPass" class="nes-input" placeholder="密码" required>
+            <button type="submit" class="nes-btn is-primary">登录</button>
         </form>
         <div class="form-switcher">
             <span>没有账户？ <a href="#" id="showRegisterLink">立即注册</a></span>
@@ -115,9 +235,9 @@
     <div id="register-container" style="display:none;">
         <h2>创建新账户</h2>
         <form id="registerForm">
-            <input type="text" id="regUser" placeholder="设置用户名" required>
-            <input type="password" id="regPass" placeholder="设置密码" required>
-            <button type="submit">注册</button>
+            <input type="text" id="regUser" class="nes-input" placeholder="设置用户名" required>
+            <input type="password" id="regPass" class="nes-input" placeholder="设置密码" required>
+            <button type="submit" class="nes-btn is-primary">注册</button>
         </form>
         <div class="form-switcher">
             <span>已有账户？ <a href="#" id="showLoginLink">返回登录</a></span>
@@ -125,7 +245,7 @@
     </div>
 
     <!-- 用于显示反馈信息 -->
-    <div id="message-box"></div>
+    <div id="message-box" class="nes-container"></div>
 </div>
 
 <script>
@@ -152,7 +272,7 @@
 
     function showMessage(message, type) {
         messageBox.textContent = message;
-        messageBox.className = `message-box ${type}`;
+        messageBox.className = `nes-container ${type}`;
         messageBox.style.display = 'block';
     }
 
@@ -165,7 +285,7 @@
         e.preventDefault();
         const loginButton = e.target.querySelector('button');
         loginButton.disabled = true;
-        loginButton.textContent = '登录中...';
+        loginButton.innerHTML = '<span class="loading-spinner"></span>登录中...';
 
         // FastAPI 的 OAuth2PasswordRequestForm 需要 FormData 格式
         const formData = new FormData();
@@ -199,7 +319,7 @@
         e.preventDefault();
         const registerButton = e.target.querySelector('button');
         registerButton.disabled = true;
-        registerButton.textContent = '注册中...';
+        registerButton.innerHTML = '<span class="loading-spinner"></span>注册中...';
 
         const userData = {
             username: document.getElementById('regUser').value,

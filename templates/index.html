@@ -2,150 +2,295 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>小说转漫画服务</title>
+    <title>小说转漫画服务 - 像素风格</title>
+    <!-- NES.css 框架 -->
+    <link href="https://unpkg.com/nes.css@latest/css/nes.min.css" rel="stylesheet" />
+    
+    
     <style>
+        @font-face {
+            font-family: 'zpix';
+            src: url('https://cdn.jsdelivr.net/gh/SolidZORO/zpix-pixel-font@master/dist/zpix.woff2') format('woff2'),
+                 url('https://cdn.jsdelivr.net/gh/SolidZORO/zpix-pixel-font@master/dist/zpix.woff') format('woff'),
+                 url('https://cdn.jsdelivr.net/gh/SolidZORO/zpix-pixel-font@master/dist/zpix.ttf') format('truetype');
+            font-weight: normal;
+            font-style: normal;
+        }
+        /* 全局样式 - 电子书墨水屏配色 */
+        * {
+            font-family: 'zpix', 'Courier New', monospace !important;
+        }
+
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            margin: 40px;
-            background-color: #f4f4f9;
-            color: #333;
+         font-family: 'zpix', 'Press Start 2P', monospace;
+            margin: 20px;
+            background-color: #f7f7f7;
+            color: #2c2c2c;
+            background-image: 
+                radial-gradient(circle at 1px 1px, rgba(0,0,0,.15) 1px, transparent 0);
+            background-size: 20px 20px;
+            line-height: 1.8;
         }
 
-        .container {
-            max-width: 800px;
-            margin: 0 auto;
-            background-color: #fff;
-            padding: 20px 40px;
-            border-radius: 12px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-        }
-
-        textarea {
-            width: 100%;
-            height: 200px;
-            margin: 10px 0;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            font-size: 16px;
-            resize: vertical;
-            box-sizing: border-box;
-        }
-
-        button {
-            padding: 10px 20px;
-            background-color: #007bff;
-            color: white;
-            border: none;
-            cursor: pointer;
-            border-radius: 8px;
-            font-size: 16px;
-            transition: background-color 0.2s;
-        }
-
-        button:hover:not(:disabled) {
-            background-color: #0056b3;
-        }
-
-        button:disabled {
-            background-color: #cccccc;
-            cursor: not-allowed;
-        }
-
-        .section-box {
-            margin: 20px 0;
-            padding: 20px;
-            border: 1px solid #e9ecef;
-            border-radius: 8px;
-            background-color: #f8f9fa;
-        }
-
-        .section-box h3 {
-            margin-top: 0;
-            color: #495057;
-            border-bottom: 2px solid #eee;
-            padding-bottom: 10px;
-        }
-
-        .message-box {
-            padding: 15px;
-            border: 1px solid;
-            margin: 10px 0;
-            border-radius: 8px;
-            text-align: center;
-        }
-
-        .error {
-            color: #721c24;
-            background-color: #f8d7da;
-            border-color: #f5c6cb;
-        }
-
-        .info {
-            color: #0c5460;
-            background-color: #d1ecf1;
-            border-color: #bee5eb;
-        }
-
-        .success {
-            color: #155724;
-            background-color: #d4edda;
-            border-color: #c3e6cb;
-        }
-
-        .warning {
-            color: #856404;
-            background-color: #fff3cd;
-            border-color: #ffeeba;
-        }
-
-        .model-controls {
+        /* 用户信息栏 - 像素风格 */
+        #user-info-bar {
+            background-color: #e8e8e8;
+            border: 4px solid #2c2c2c;
+            padding: 12px 16px;
+            margin-bottom: 20px;
             display: flex;
+            justify-content: space-between;
             align-items: center;
-            gap: 15px;
-            flex-wrap: wrap;
+            position: relative;
         }
 
-        .model-status {
-            margin-top: 10px;
-            padding: 8px 12px;
-            border-radius: 4px;
+        #user-info-bar::before {
+            content: '';
+            position: absolute;
+            top: -4px;
+            left: -4px;
+            right: -4px;
+            bottom: -4px;
+            background: linear-gradient(45deg, #333 25%, transparent 25%), 
+                        linear-gradient(-45deg, #333 25%, transparent 25%),
+                        linear-gradient(45deg, transparent 75%, #333 75%), 
+                        linear-gradient(-45deg, transparent 75%, #333 75%);
+            background-size: 8px 8px;
+            background-position: 0 0, 0 4px, 4px -4px, -4px 0px;
+            z-index: -1;
+        }
+
+        #userInfoText {
+            color: #2c2c2c;
             font-size: 14px;
         }
 
-        .confirm-btn {
+        #logoutBtn {
+            color: #dc3545;
+            text-decoration: none;
+            padding: 4px 8px;
+            border: 2px solid #dc3545;
+            background-color: #fff;
+            transition: all 0.2s;
+        }
+
+        #logoutBtn:hover {
+            background-color: #dc3545;
+            color: #fff;
+        }
+
+        /* 主容器 - 墨水屏风格 */
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background-color: #fafafa;
+            border: 4px solid #333;
+            box-shadow: 8px 8px 0px #333;
+            padding: 24px;
+            position: relative;
+        }
+
+        .container::before {
+            content: '';
+            position: absolute;
+            top: 8px;
+            left: 8px;
+            right: 8px;
+            bottom: 8px;
+            border: 2px dashed #666;
+            pointer-events: none;
+        }
+
+        /* 标题样式 */
+        h1 {
+            text-align: center;
+            color: #2c2c2c;
+            margin-bottom: 24px;
+            font-size: 24px;
+            text-shadow: 2px 2px 0px #e0e0e0;
+        }
+
+        /* 文本区域 - 像素风格 */
+        textarea {
+            width: 100%;
+            height: 200px;
+            margin: 16px 0;
+            padding: 16px;
+            background-color: #f5f5f5;
+            border: 3px solid #333;
+            box-shadow: inset 4px 4px 0px #e0e0e0;
+            font-size: 14px;
+            resize: vertical;
+            box-sizing: border-box;
+            color: #2c2c2c;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: #007bff;
+box-shadow: inset 4px 4px 0px #cce7ff;
+        }
+
+        /* 区块容器 - NES风格结合墨水屏配色 */
+        .section-box {
+            margin: 24px 0;
+            background-color: #f8f8f8;
+            border: 3px solid #333;
+            position: relative;
+        }
+
+        .section-box h3 {
+            margin: 0;
+            padding: 12px 16px;
+            background-color: #e8e8e8;
+            color: #2c2c2c;
+            border-bottom: 3px solid #333;
+            font-size: 16px;
+        }
+
+        .section-content {
+            padding: 16px;
+        }
+
+        /* 消息框 - 明快配色 */
+        .message-box {
+            padding: 12px 16px;
+            border: 3px solid;
+            margin: 12px 0;
+            font-size: 14px;
+            text-align: center;
+            position: relative;
+        }
+
+        .error {
+            color: #fff;
+            background-color: #dc3545;
+            border-color: #a71e2a;
+        }
+
+        .info {
+            color: #fff;
+            background-color: #17a2b8;
+            border-color: #117a8b;
+        }
+
+        .success {
+            color: #fff;
             background-color: #28a745;
+            border-color: #1e7e34;
+        }
+
+        .warning {
+            color: #2c2c2c;
+            background-color: #ffc107;
+            border-color: #d39e00;
+        }
+
+        /* 表单控件 - 像素风格 */
+        select, input[type="number"] {
+            padding: 8px 12px;
+            border: 3px solid #333;
+            background-color: #fff;
+            color: #2c2c2c;
+            font-size: 14px;
+            box-shadow: 2px 2px 0px #ccc;
+        }
+
+        select:focus, input[type="number"]:focus {
+            outline: none;
+            border-color: #007bff;
+            box-shadow: 2px 2px 0px #007bff;
+        }
+
+        /* 按钮样式 - 使用NES.css类并自定义颜色 */
+        button {
+            font-size: 14px;
+            padding: 12px 16px;
+            border: none;
+            cursor: pointer;
+            position: relative;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .nes-btn {
+            background-color: #007bff;
+            color: #fff;
+            border: 3px solid #333 !important;
+        }
+
+        .nes-btn:hover:not(:disabled) {
+            background-color: #0056b3;
+        }
+
+        .nes-btn:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+
+        .confirm-btn {
+            background-color: #28a745 !important;
+            color: #fff;
         }
 
         .confirm-btn:hover:not(:disabled) {
-            background-color: #218838;
+            background-color: #218838 !important;
         }
 
-        .loading-spinner {
-            display: inline-block;
-            width: 16px;
-            height: 16px;
-            border: 2px solid #f3f3f3;
-            border-top: 2px solid #3498db;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin-right: 8px;
-            vertical-align: middle;
+        .img2img-btn {
+            background-color: #17a2b8 !important;
+            color: #fff;
         }
 
-        @keyframes spin {
-            0% {
-                transform: rotate(0deg);
-            }
-            100% {
-                transform: rotate(360deg);
-            }
+        .img2img-btn:hover {
+            background-color: #138496 !important;
         }
 
+        /* 模型控制区域 */
+        .model-controls {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            padding: 16px;
+        }
+
+        .model-controls label {
+            color: #2c2c2c;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        .model-controls select {
+            min-width: 200px;
+        }
+
+        /* 当前模型信息 */
+        #currentModelInfo {
+            display: none;
+            padding: 16px;
+        }
+
+        #currentModelInfo > div {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: #e8e8e8;
+            padding: 12px;
+            border: 2px solid #333;
+        }
+
+        #currentModelText {
+            color: #2c2c2c;
+            font-weight: bold;
+        }
+
+        /* 参数网格 */
         .param-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-            gap: 15px;
+            gap: 16px;
+            padding: 16px;
         }
 
         .param-item {
@@ -154,465 +299,567 @@
         }
 
         .param-item label {
-            margin-bottom: 5px;
+            margin-bottom: 8px;
             font-size: 14px;
-            color: #333;
+            color: #2c2c2c;
+            font-weight: bold;
         }
 
-        .param-item input {
-            padding: 8px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
+        /* 风格管理区域 */
+        .style-controls {
+            padding: 16px;
         }
 
-        #currentModelInfo {
-            display: none;
+        .style-controls > * {
+            margin-bottom: 12px;
+            display: block;
         }
 
-        #modelSelectionArea {
-            display: none;
-            margin-top: 10px;
+        .style-controls label {
+            color: #2c2c2c;
+            font-weight: bold;
+            margin-bottom: 4px;
+        }
+
+        .style-controls select,
+        .style-controls input {
+            width: 100%;
+            max-width: 300px;
+        }
+
+        .style-buttons {
+            display: flex;
+            gap: 12px;
+            margin-top: 12px;
+        }
+
+        /* 按钮组 */
+        .button-group {
+            display: flex;
+            gap: 16px;
+            margin-top: 24px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        /* 加载动画 - 像素风格 */
+        .loading-spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #007bff;
+            animation: spin 1s steps(8, end) infinite;
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* 状态消息 */
+        #loraStatusMessage {
+            margin-top: 12px;
+            padding: 8px 12px;
+            background-color: #e8e8e8;
+            border: 2px solid #333;
+            color: #2c2c2c;
+            font-size: 12px;
+        }
+
+        /* 模型选择区域 */
+        #modelSelectionArea,
+        #initialModelSelection {
+            background-color: #f0f0f0;
+            border-top: 2px dashed #666;
+            margin-top: 12px;
         }
 
         #initialModelSelection {
             display: flex;
         }
 
-        .button-group {
-            display: flex;
-            gap: 15px;
-            margin-top: 20px;
-            flex-wrap: wrap;
+        /* 项目标识图片 */
+        .project-logo {
+            max-width: 200px;
+            display: block;
+            margin: 0 auto 24px auto;
+            border: 4px solid #333;
+            box-shadow: 4px 4px 0px #ccc;
+            image-rendering: pixelated;
         }
 
-        .img2img-btn {
-            background-color: #17a2b8;
+        /* 响应式设计 */
+        @media (max-width: 768px) {
+            body {
+                margin: 10px;
+            }
+            
+            .container {
+                padding: 16px;
+            }
+            
+            .param-grid {
+                grid-template-columns: 1fr;
+                gap: 12px;
+            }
+            
+            .button-group {
+                flex-direction: column;
+                align-items: center;
+            }
+            
+            .model-controls {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .style-buttons {
+                flex-direction: column;
+            }
         }
 
-        .img2img-btn:hover {
-            background-color: #138496;
+        /* 隐藏元素 */
+        .hidden {
+            display: none !important;
         }
     </style>
 </head>
 <body>
-<!-- 添加用户信息栏 -->
-<div id="user-info-bar">
-    <span id="userInfoText">加载中...</span>
-    <a href="#" id="logoutBtn">登出</a>
-</div>
+    <!-- 用户信息栏 -->
+    <div id="user-info-bar" class="nes-container">
+        <span id="userInfoText">加载中...</span>
+        <a href="#" id="logoutBtn" class="nes-btn is-error">登出</a>
+    </div>
 
-<div class="container">
-    <img src="/static/ThePromisedLand.png" alt="项目标识"
-         style="max-width: 200px; display: block; margin: 0 auto 20px auto; border-radius: 8px;">
-    <h1>小说转漫画服务</h1>
-    <div>
-        <textarea id="novelText" placeholder="在此输入一段奇妙的冒险故事..."></textarea>
+    <div class="container nes-container with-title">
+        <p class="title">像素漫画工坊</p>
+        <img src="/static/ThePromisedLand.png" alt="项目标识" class="project-logo">
+        
+        <h1>小说转漫画服务</h1>
+        
+        <div>
+            <textarea id="novelText" class="nes-textarea" placeholder="在此输入一段奇妙的冒险故事..."></textarea>
 
-        <div class="section-box">
-            <h3>模型管理</h3>
-            <div id="currentModelInfo">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <span id="currentModelText"></span>
-                    <button id="changeModelBtn" onclick="showModelSelection()" class="warning">切换模型</button>
+            <!-- 模型管理 -->
+            <div class="section-box nes-container with-title">
+                <p class="title">模型管理</p>
+                <div class="section-content">
+                    <div id="currentModelInfo">
+                        <div class="nes-container">
+                            <span id="currentModelText"></span>
+                            <button id="changeModelBtn" onclick="showModelSelection()" class="nes-btn is-warning">切换模型</button>
+                        </div>
+                    </div>
+                    
+                    <div id="modelSelectionArea" class="hidden">
+                        <div class="model-controls">
+                            <label for="modelSelect">选择新模型:</label>
+                            <select id="modelSelect" class="nes-select"></select>
+                            <button id="confirmModelBtn" class="nes-btn is-success confirm-btn" onclick="confirmModel()" disabled>确认加载</button>
+                            <button onclick="hideModelSelection()" class="nes-btn">取消</button>
+                        </div>
+                    </div>
+                    
+                    <div id="initialModelSelection" class="model-controls">
+                        <label for="initialModelSelect">选择模型:</label>
+                        <select id="initialModelSelect" class="nes-select"></select>
+                        <button id="initialConfirmBtn" class="nes-btn is-success confirm-btn" onclick="confirmInitialModel()" disabled>确认加载</button>
+                    </div>
+                    
+                    <div id="modelStatus" class="message-box hidden"></div>
                 </div>
             </div>
-            <div id="modelSelectionArea">
-                <div class="model-controls">
-                    <label for="modelSelect">选择新模型:</label>
-                    <select id="modelSelect"></select>
-                    <button id="confirmModelBtn" class="confirm-btn" onclick="confirmModel()" disabled>确认加载</button>
-                    <button onclick="hideModelSelection()" style="background-color: #6c757d;">取消</button>
+
+            <!-- 风格管理 -->
+            <div class="section-box nes-container with-title">
+                <p class="title">风格管理</p>
+                <div class="section-content style-controls">
+                    <label for="loraSelect">选择风格:</label>
+                    <select id="loraSelect" class="nes-select">
+                        <option value="">加载失败或无风格</option>
+                    </select>
+                    
+                    <label for="loraScaleInput">权重 scale (0.0 - 2.0):</label>
+                    <input type="number" id="loraScaleInput" class="nes-input" min="0" max="2" step="0.1" value="1.0">
+                    
+                    <div class="style-buttons">
+                        <button id="loadLoraBtn" class="nes-btn is-primary">加载风格</button>
+                        <button id="unloadLoraBtn" class="nes-btn">卸载风格</button>
+                    </div>
+                    
+                    <div id="loraStatusMessage" class="nes-container">状态信息将在此显示</div>
                 </div>
             </div>
-            <div id="initialModelSelection" class="model-controls">
-                <label for="initialModelSelect">选择模型:</label>
-                <select id="initialModelSelect"></select>
-                <button id="initialConfirmBtn" class="confirm-btn" onclick="confirmInitialModel()" disabled>确认加载
+
+            <!-- 生成参数 -->
+            <div class="section-box nes-container with-title">
+                <p class="title">生成参数</p>
+                <div class="section-content">
+                    <div class="param-grid">
+                        <div class="param-item">
+                            <label for="numScenes">场景数量</label>
+                            <input type="number" id="numScenes" class="nes-input" value="10" min="1" max="20">
+                        </div>
+                        <div class="param-item">
+                            <label for="steps">迭代步数</label>
+                            <input type="number" id="steps" class="nes-input" value="30" min="10" max="100">
+                        </div>
+                        <div class="param-item">
+                            <label for="guidance">引导系数</label>
+                            <input type="number" id="guidance" class="nes-input" value="7.5" min="1" max="20" step="0.5">
+                        </div>
+                        <div class="param-item">
+                            <label for="width">图片宽度</label>
+                            <input type="number" id="width" class="nes-input" value="512" min="256" max="1024" step="64">
+                        </div>
+                        <div class="param-item">
+                            <label for="height">图片高度</label>
+                            <input type="number" id="height" class="nes-input" value="512" min="256" max="1024" step="64">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 操作按钮 -->
+            <div class="button-group">
+                <button id="generateBtn" class="nes-btn is-primary" onclick="handleGenerateClick()">
+                    <i class="nes-icon trophy"></i>生成漫画
+                </button>
+                <button id="img2imgBtn" class="nes-btn is-success img2img-btn" onclick="goToImg2Img()">
+                    <i class="nes-icon star"></i>去图生图
                 </button>
             </div>
-            <div id="modelStatus" class="message-box" style="display: none;"></div>
-        </div>
-
-        <!-- LoRA风格管理模块 -->
-        <div class="section-box">
-            <h3>风格管理</h3>
-            <label for="loraSelect">选择风格:</label>
-            <select id="loraSelect" style="width: 100%; padding: 8px; margin-bottom: 8px;">
-                <option value="">加载失败或无风格</option>
-            </select>
-            <label for="loraScaleInput">权重 scale (0.0 - 2.0):</label>
-            <input type="number" id="loraScaleInput" min="0" max="2" step="0.1" value="1.0" style="width: 100px; margin-bottom: 8px;">
-            <div>
-                <button id="loadLoraBtn" style="margin-right: 10px;">加载风格</button>
-                <button id="unloadLoraBtn">卸载风格</button>
-            </div>
-            <div id="loraStatusMessage" style="margin-top: 8px; color: #555;"></div>
-        </div>
-
-        <div class="section-box">
-            <h3>生成参数</h3>
-            <div class="param-grid">
-                <div class="param-item"><label for="numScenes">场景数量</label><input type="number" id="numScenes"
-                                                                                      value="10" min="1" max="20"></div>
-                <div class="param-item"><label for="steps">迭代步数</label><input type="number" id="steps" value="30"
-                                                                                  min="10" max="100"></div>
-                <div class="param-item"><label for="guidance">引导系数</label><input type="number" id="guidance"
-                                                                                     value="7.5" min="1" max="20"
-                                                                                     step="0.5"></div>
-                <div class="param-item"><label for="width">图片宽度</label><input type="number" id="width" value="512"
-                                                                                  min="256" max="1024" step="64"></div>
-                <div class="param-item"><label for="height">图片高度</label><input type="number" id="height" value="512"
-                                                                                   min="256" max="1024" step="64"></div>
-            </div>
-        </div>
-
-        <div class="button-group">
-            <button id="generateBtn" onclick="handleGenerateClick()">生成漫画</button>
-            <button id="img2imgBtn" class="img2img-btn" onclick="goToImg2Img()">去图生图</button>
         </div>
     </div>
-</div>
 
-<script>
-    // --- 全局状态 ---
-    const token = localStorage.getItem('accessToken');
-    let currentUser = null;
-    let isModelLoaded = false;
-    let isLoadingModel = false;
-    let selectedModel = null;
+    <script>
+        // --- 全局状态 ---
+        const token = localStorage.getItem('accessToken');
+        let currentUser = null;
+        let isModelLoaded = false;
+        let isLoadingModel = false;
+        let selectedModel = null;
 
-    // --- 应用初始化 ---
-    window.addEventListener('load', initApp);
-  
-    async function initApp() {
-        if (!token) {
-            window.location.href = '/login?session=expired';
-            return;
-        }
-        await getUserInfo();
-        if (currentUser) {
-            await loadAvailableModels();
-            await checkModelStatus();
-            await loadLorasToSelect();
-            await updateLoraStatus();
-        }
-    }
-
-    // --- 用户管理 ---
-    async function getUserInfo() {
-        try {
-            const response = await fetch('/users/me', {
-                headers: {'Authorization': `Bearer ${token}`}
-            });
-            if (!response.ok) {
-                localStorage.removeItem('accessToken');
+        // --- 应用初始化 ---
+        window.addEventListener('load', initApp);
+      
+        async function initApp() {
+            if (!token) {
                 window.location.href = '/login?session=expired';
                 return;
             }
-            currentUser = await response.json();
-            document.getElementById('userInfoText').textContent =
-                    `用户: ${currentUser.username} | 剩余积分: ${currentUser.credits}`;
-        } catch (error) {
-            console.error('获取用户信息失败:', error);
-            document.getElementById('userInfoText').innerHTML = `获取用户信息失败. <a href="/login">重新登录</a>`;
-        }
-    }
-
-    document.getElementById('logoutBtn').addEventListener('click', (e) => {
-        e.preventDefault();
-        localStorage.removeItem('accessToken');
-        window.location.href = '/login';
-    });
-
-    async function loadAvailableModels() {
-        try {
-            const response = await fetch('/available-models');
-            const data = await response.json();
-            ['modelSelect', 'initialModelSelect'].forEach(id => {
-                const select = document.getElementById(id);
-                select.innerHTML = '';
-                if (data.models && data.models.length > 0) {
-                    select.appendChild(new Option('请选择一个模型', ''));
-                    data.models.forEach(model => select.appendChild(new Option(model, model)));
-                } else {
-                    select.appendChild(new Option('无可用模型', ''));
-                }
-            });
-        } catch (error) {
-            console.error('获取模型列表失败:', error);
-            ['modelSelect', 'initialModelSelect'].forEach(id => {
-                document.getElementById(id).innerHTML = '<option value="">获取失败</option>';
-            });
-        }
-    }
-
-    async function loadLorasToSelect() {
-        try {
-            const resp = await fetch('/available-loras');
-            const data = await resp.json();
-            const select = document.getElementById('loraSelect');
-            select.innerHTML = '';
-            if (data.loras && data.loras.length > 0) {
-                select.appendChild(new Option('请选择风格', ''));
-                data.loras.forEach(lora => {
-                    const option = new Option(`${lora.name} - ${lora.description}`, lora.name);
-                    select.appendChild(option);
-                });
-            } else {
-                select.appendChild(new Option('无可用风格', ''));
+            await getUserInfo();
+            if (currentUser) {
+                await loadAvailableModels();
+                await checkModelStatus();
+                await loadLorasToSelect();
+                await updateLoraStatus();
             }
-        } catch (e) {
-            console.error('获取风格列表失败', e);
-            const select = document.getElementById('loraSelect');
-            select.innerHTML = '<option value="">获取失败</option>';
         }
-    }
 
-    document.getElementById('loadLoraBtn').addEventListener('click', async () => {
-        const loraName = document.getElementById('loraSelect').value;
-        if (!loraName) {
-            alert('请选择一个风格');
-            return;
+        // --- 用户管理 ---
+        async function getUserInfo() {
+            try {
+                const response = await fetch('/users/me', {
+                    headers: {'Authorization': `Bearer ${token}`}
+                });
+                if (!response.ok) {
+                    localStorage.removeItem('accessToken');
+                    window.location.href = '/login?session=expired';
+                    return;
+                }
+                currentUser = await response.json();
+                document.getElementById('userInfoText').textContent =
+                        `用户: ${currentUser.username} | 剩余积分: ${currentUser.credits}`;
+            } catch (error) {
+                console.error('获取用户信息失败:', error);
+                document.getElementById('userInfoText').innerHTML = `获取用户信息失败. <a href="/login">重新登录</a>`;
+            }
         }
-        const res = await fetch('/load-lora', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({lora_name: loraName})
+
+        document.getElementById('logoutBtn').addEventListener('click', (e) => {
+            e.preventDefault();
+            localStorage.removeItem('accessToken');
+            window.location.href = '/login';
         });
-        const data = await res.json();
-        document.getElementById('loraStatusMessage').textContent = data.message || '操作完成';
-        if (data.success) {
-            // 加载成功后默认scale显示1.0
-            document.getElementById('loraScaleInput').value = "1.0";
-        }
-    });
 
-    document.getElementById('loraScaleInput').addEventListener('change', async () => {
-        const scale = parseFloat(document.getElementById('loraScaleInput').value);
-        if (isNaN(scale) || scale < 0 || scale > 2) {
-            alert('权重scale需在0到2之间');
-            return;
+        async function loadAvailableModels() {
+            try {
+                const response = await fetch('/available-models');
+                const data = await response.json();
+                ['modelSelect', 'initialModelSelect'].forEach(id => {
+                    const select = document.getElementById(id);
+                    select.innerHTML = '';
+                    if (data.models && data.models.length > 0) {
+                        select.appendChild(new Option('请选择一个模型', ''));
+                        data.models.forEach(model => select.appendChild(new Option(model, model)));
+                    } else {
+                        select.appendChild(new Option('无可用模型', ''));
+                    }
+                });
+            } catch (error) {
+                console.error('获取模型列表失败:', error);
+                ['modelSelect', 'initialModelSelect'].forEach(id => {
+                    document.getElementById(id).innerHTML = '<option value="">获取失败</option>';
+                });
+            }
         }
-        const res = await fetch('/set-lora-scale', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({scale: scale})
-        });
-        const data = await res.json();
-        document.getElementById('loraStatusMessage').textContent = data.message || 'scale调整完成';
-    });
 
-    document.getElementById('unloadLoraBtn').addEventListener('click', async () => {
-        const res = await fetch('/unload-lora', {method: 'POST'});
-        const data = await res.json();
-        document.getElementById('loraStatusMessage').textContent = data.message || '操作完成';
-        if (data.success) {
-            document.getElementById('loraScaleInput').value = "1.0";
+        async function loadLorasToSelect() {
+            try {
+                const resp = await fetch('/available-loras');
+                const data = await resp.json();
+                const select = document.getElementById('loraSelect');
+                select.innerHTML = '';
+                if (data.loras && data.loras.length > 0) {
+                    select.appendChild(new Option('请选择风格', ''));
+                    data.loras.forEach(lora => {
+                        const option = new Option(`${lora.name} - ${lora.description}`, lora.name);
+                        select.appendChild(option);
+                    });
+                } else {
+                    select.appendChild(new Option('无可用风格', ''));
+                }
+            } catch (e) {
+                console.error('获取风格列表失败', e);
+                const select = document.getElementById('loraSelect');
+                select.innerHTML = '<option value="">获取失败</option>';
+            }
         }
-    });
 
-    async function updateLoraStatus() {
-        try {
-            const res = await fetch('/lora-status');
+        document.getElementById('loadLoraBtn').addEventListener('click', async () => {
+            const loraName = document.getElementById('loraSelect').value;
+            if (!loraName) {
+                alert('请选择一个风格');
+                return;
+            }
+            const res = await fetch('/load-lora', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({lora_name: loraName})
+            });
             const data = await res.json();
-            const statusMsg = data.loaded 
-                ? `当前加载风格: ${data.name || '未知'}，权重scale: ${data.scale.toFixed(2)}`
-                : "未加载任何风格";
-            document.getElementById('loraStatusMessage').textContent = statusMsg;
-            if (data.loaded) {
-                document.getElementById('loraScaleInput').value = data.scale.toFixed(2);
-            } else {
+            document.getElementById('loraStatusMessage').textContent = data.message || '操作完成';
+            if (data.success) {
                 document.getElementById('loraScaleInput').value = "1.0";
             }
-        } catch (e) {
-            console.error('获取LoRA状态失败', e);
-        }
-    }
+        });
 
-    async function checkModelStatus() {
-        try {
-            const response = await fetch('/model-status');
-            const data = await response.json();
-            isModelLoaded = data.is_loaded;
-            if (data.is_loaded && data.current_model) {
-                selectedModel = data.current_model;
-                showCurrentModelInfo(data.current_model);
-            } else {
+        document.getElementById('loraScaleInput').addEventListener('change', async () => {
+            const scale = parseFloat(document.getElementById('loraScaleInput').value);
+            if (isNaN(scale) || scale < 0 || scale > 2) {
+                alert('权重scale需在0到2之间');
+                return;
+            }
+            const res = await fetch('/set-lora-scale', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({scale: scale})
+            });
+            const data = await res.json();
+            document.getElementById('loraStatusMessage').textContent = data.message || 'scale调整完成';
+        });
+
+        document.getElementById('unloadLoraBtn').addEventListener('click', async () => {
+            const res = await fetch('/unload-lora', {method: 'POST'});
+            const data = await res.json();
+            document.getElementById('loraStatusMessage').textContent = data.message || '操作完成';
+            if (data.success) {
+                document.getElementById('loraScaleInput').value = "1.0";
+            }
+        });
+
+        async function updateLoraStatus() {
+            try {
+                const res = await fetch('/lora-status');
+                const data = await res.json();
+                const statusMsg = data.loaded 
+                    ? `当前加载风格: ${data.name || '未知'}，权重scale: ${data.scale.toFixed(2)}`
+                    : "未加载任何风格";
+                document.getElementById('loraStatusMessage').textContent = statusMsg;
+                if (data.loaded) {
+                    document.getElementById('loraScaleInput').value = data.scale.toFixed(2);
+                } else {
+                    document.getElementById('loraScaleInput').value = "1.0";
+                }
+            } catch (e) {
+                console.error('获取LoRA状态失败', e);
+            }
+        }
+
+        async function checkModelStatus() {
+            try {
+                const response = await fetch('/model-status');
+                const data = await response.json();
+                isModelLoaded = data.is_loaded;
+                if (data.is_loaded && data.current_model) {
+                    selectedModel = data.current_model;
+                    showCurrentModelInfo(data.current_model);
+                } else {
+                    showInitialModelSelection();
+                }
+            } catch (error) {
+                console.error('获取模型状态失败:', error);
                 showInitialModelSelection();
             }
-        } catch (error) {
-            console.error('获取模型状态失败:', error);
-            showInitialModelSelection();
         }
-    }
 
-    function showCurrentModelInfo(modelName) {
-        document.getElementById('currentModelText').textContent = `当前模型: ${modelName}`;
-        document.getElementById('currentModelInfo').style.display = 'block';
-        document.getElementById('initialModelSelection').style.display = 'none';
-        document.getElementById('modelSelectionArea').style.display = 'none';
-    }
-
-    function showInitialModelSelection() {
-        document.getElementById('currentModelInfo').style.display = 'none';
-        document.getElementById('initialModelSelection').style.display = 'flex';
-    }
-
-    function showModelSelection() {
-        document.getElementById('modelSelectionArea').style.display = 'block';
-        document.getElementById('modelSelect').value = '';
-        document.getElementById('confirmModelBtn').disabled = true;
-    }
-
-    function hideModelSelection() {
-        document.getElementById('modelSelectionArea').style.display = 'none';
-    }
-
-    document.getElementById('initialModelSelect').addEventListener('change', function () {
-        setModel(this.value, 'initialConfirmBtn');
-    });
-    document.getElementById('modelSelect').addEventListener('change', function () {
-        setModel(this.value, 'confirmModelBtn');
-    });
-
-    async function setModel(modelName, btnId) {
-        const confirmBtn = document.getElementById(btnId);
-        if (!modelName) {
-            confirmBtn.disabled = true;
-            return;
+        function showCurrentModelInfo(modelName) {
+            document.getElementById('currentModelText').textContent = `当前模型: ${modelName}`;
+            document.getElementById('currentModelInfo').style.display = 'block';
+            document.getElementById('initialModelSelection').style.display = 'none';
+            document.getElementById('modelSelectionArea').classList.add('hidden');
         }
-        try {
-            const response = await fetch('/set-model', {
-                method: 'POST', headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({model_name: modelName})
-            });
-            const result = await response.json();
-            if (result.success) {
-                selectedModel = modelName;
-                confirmBtn.disabled = false;
-                const message = isModelLoaded ? `切换模型到: ${modelName} (需要重新加载)` : `已选择: ${modelName}`;
-                showModelStatus(message, isModelLoaded ? 'warning' : 'info');
-            } else {
-                showModelStatus(`模型设置失败: ${result.message}`, 'error');
+
+        function showInitialModelSelection() {
+            document.getElementById('currentModelInfo').style.display = 'none';
+            document.getElementById('initialModelSelection').style.display = 'flex';
+        }
+
+        function showModelSelection() {
+            document.getElementById('modelSelectionArea').classList.remove('hidden');
+            document.getElementById('modelSelect').value = '';
+            document.getElementById('confirmModelBtn').disabled = true;
+        }
+
+        function hideModelSelection() {
+            document.getElementById('modelSelectionArea').classList.add('hidden');
+        }
+
+        document.getElementById('initialModelSelect').addEventListener('change', function () {
+            setModel(this.value, 'initialConfirmBtn');
+        });
+        document.getElementById('modelSelect').addEventListener('change', function () {
+            setModel(this.value, 'confirmModelBtn');
+        });
+
+        async function setModel(modelName, btnId) {
+            const confirmBtn = document.getElementById(btnId);
+            if (!modelName) {
+                confirmBtn.disabled = true;
+                return;
             }
-        } catch (error) {
-            showModelStatus(`设置请求失败: ${error.message}`, 'error');
+            try {
+                const response = await fetch('/set-model', {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({model_name: modelName})
+                });
+                const result = await response.json();
+                if (result.success) {
+                    selectedModel = modelName;
+                    confirmBtn.disabled = false;
+                    const message = isModelLoaded ? `切换模型到: ${modelName} (需要重新加载)` : `已选择: ${modelName}`;
+                    showModelStatus(message, isModelLoaded ? 'warning' : 'info');
+                } else {
+                    showModelStatus(`模型设置失败: ${result.message}`, 'error');
+                }
+            } catch (error) {
+                showModelStatus(`设置请求失败: ${error.message}`, 'error');
+            }
         }
-    }
 
-    async function confirmInitialModel() {
-        await loadModel('initialConfirmBtn', 'initialModelSelect');
-    }
+        async function confirmInitialModel() {
+            await loadModel('initialConfirmBtn', 'initialModelSelect');
+        }
 
-    async function confirmModel() {
-        await loadModel('confirmModelBtn', 'modelSelect');
-    }
+        async function confirmModel() {
+            await loadModel('confirmModelBtn', 'modelSelect');
+        }
 
-    async function loadModel(btnId, selectId) {
-        if (!selectedModel || isLoadingModel) return;
-        const confirmBtn = document.getElementById(btnId);
-        const modelSelect = document.getElementById(selectId);
+        async function loadModel(btnId, selectId) {
+            if (!selectedModel || isLoadingModel) return;
+            const confirmBtn = document.getElementById(btnId);
+            const modelSelect = document.getElementById(selectId);
 
-        isLoadingModel = true;
-        confirmBtn.disabled = true;
-        if (modelSelect) modelSelect.disabled = true;
-        confirmBtn.innerHTML = '<span class="loading-spinner"></span>加载中...';
-        showModelStatus('模型正在加载到显存，请耐心等待...', 'info');
+            isLoadingModel = true;
+            confirmBtn.disabled = true;
+            if (modelSelect) modelSelect.disabled = true;
+            confirmBtn.innerHTML = '<span class="loading-spinner"></span>加载中...';
+            showModelStatus('模型正在加载到显存，请耐心等待...', 'info');
 
-        try {
-            const response = await fetch('/load-model', {method: 'POST'});
-            const result = await response.json();
-            if (result.success) {
-                isModelLoaded = true;
-                showModelStatus('模型加载成功！', 'success');
-                showCurrentModelInfo(selectedModel);
-                setTimeout(hideModelStatus, 3000);
-            } else {
+            try {
+                const response = await fetch('/load-model', {method: 'POST'});
+                const result = await response.json();
+                if (result.success) {
+                    isModelLoaded = true;
+                    showModelStatus('模型加载成功！', 'success');
+                    showCurrentModelInfo(selectedModel);
+                    setTimeout(hideModelStatus, 3000);
+                } else {
+                    isModelLoaded = false;
+                    showModelStatus(`模型加载失败: ${result.message}`, 'error');
+                    confirmBtn.innerHTML = '确认加载';
+                    confirmBtn.disabled = false;
+                    if (modelSelect) modelSelect.disabled = false;
+                }
+            } catch (error) {
                 isModelLoaded = false;
-                showModelStatus(`模型加载失败: ${result.message}`, 'error');
+                showModelStatus(`加载模型请求失败: ${error.message}`, 'error');
                 confirmBtn.innerHTML = '确认加载';
                 confirmBtn.disabled = false;
                 if (modelSelect) modelSelect.disabled = false;
             }
-        } catch (error) {
-            isModelLoaded = false;
-            showModelStatus(`加载模型请求失败: ${error.message}`, 'error');
-            confirmBtn.innerHTML = '确认加载';
-            confirmBtn.disabled = false;
-            if (modelSelect) modelSelect.disabled = false;
-        }
-        isLoadingModel = false;
-    }
-
-    function showModelStatus(message, type) {
-        const statusDiv = document.getElementById('modelStatus');
-        statusDiv.style.display = 'block';
-        statusDiv.textContent = message;
-        statusDiv.className = `message-box ${type}`;
-    }
-
-    function hideModelStatus() {
-        document.getElementById('modelStatus').style.display = 'none';
-    }
-
-    // --- 生成按钮的"守卫"函数 ---
-    function handleGenerateClick() {
-
-        // 1. 前置检查
-        if (!isModelLoaded) {
-            alert('请先选择并成功加载一个模型！');
-            return;
-        }
-        if (!document.getElementById('novelText').value.trim()) {
-            alert('请输入小说文本！');
-            return;
-        }
-        if (!currentUser) {
-            alert('无法获取用户信息，请刷新页面重试。');
-            return;
+            isLoadingModel = false;
         }
 
-        const numScenes = parseInt(document.getElementById('numScenes').value);
-        const requiredCredits = numScenes * 100;
-        const text = document.getElementById('novelText').value;
-        const steps = document.getElementById('steps').value;
-        const guidance = document.getElementById('guidance').value;
-        const width = document.getElementById('width').value;
-        const height = document.getElementById('height').value;
-
-        if (currentUser.credits < requiredCredits) {
-            alert(`积分不足！\n\n本次生成需要: ${requiredCredits} 积分\n您当前拥有: ${currentUser.credits} 积分\n\n请减少场景数量或等待明天积分重置。`);
-            return;
+        function showModelStatus(message, type) {
+            const statusDiv = document.getElementById('modelStatus');
+            statusDiv.classList.remove('hidden');
+            statusDiv.textContent = message;
+            statusDiv.className = `message-box ${type}`;
         }
 
-        const params = {
-            text: text,
-            num_scenes: numScenes,
-            steps: steps,
-            guidance: guidance,
-            width: width,
-            height: height
-        };
+        function hideModelStatus() {
+            document.getElementById('modelStatus').classList.add('hidden');
+        }
 
-        sessionStorage.setItem('comicParams', JSON.stringify(params));
-        window.location.href = '/pic';
+        function handleGenerateClick() {
+            if (!isModelLoaded) {
+                alert('请先选择并成功加载一个模型！');
+                return;
+            }
+            if (!document.getElementById('novelText').value.trim()) {
+                alert('请输入小说文本！');
+                return;
+            }
+            if (!currentUser) {
+                alert('无法获取用户信息，请刷新页面重试。');
+                return;
+            }
 
-        // 2. 所有检查通过，调用核心生成函数
-        generateComic();
-    }
+            const numScenes = parseInt(document.getElementById('numScenes').value);
+            const requiredCredits = numScenes * 100;
+            const text = document.getElementById('novelText').value;
+            const steps = document.getElementById('steps').value;
+            const guidance = document.getElementById('guidance').value;
+            const width = document.getElementById('width').value;
+            const height = document.getElementById('height').value;
 
+            if (currentUser.credits < requiredCredits) {
+                alert(`积分不足！\n\n本次生成需要: ${requiredCredits} 积分\n您当前拥有: ${currentUser.credits} 积分\n\n请减少场景数量或等待明天积分重置。`);
+                return;
+            }
 
+            const params = {
+                text: text,
+                num_scenes: numScenes,
+                steps: steps,
+                guidance: guidance,
+                width: width,
+                height: height
+            };
 
-    // --- 图生图功能 ---
-    function goToImg2Img() {
-        // 构建8081端口的img2img URL
-        const img2imgUrl = 'http://127.0.0.1:8081';
+            sessionStorage.setItem('comicParams', JSON.stringify(params));
+            window.location.href = '/pic';
+        }
 
-        // 在新标签页中打开
-        window.open(img2imgUrl, '_blank');
-    }
-
-
-</script>
+        function goToImg2Img() {
+            const img2imgUrl = 'http://127.0.0.1:8081';
+            window.open(img2imgUrl, '_blank');
+        }
+    </script>
 </body>
 </html>
