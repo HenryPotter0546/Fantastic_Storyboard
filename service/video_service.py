@@ -1,6 +1,7 @@
 import os
 import logging
-import pyttsx3
+import asyncio
+import edge_tts
 import ffmpeg
 import random
 import re
@@ -13,17 +14,11 @@ logger = logging.getLogger(__name__)
 
 class VideoService:
     def __init__(self):
-        # 初始化TTS引擎
-        self.tts_engine = pyttsx3.init()
-        self.tts_engine.setProperty('rate', 150)  # 语速
-        self.tts_engine.setProperty('volume', 0.8)  # 音量
-
-        # 设置中文语音（如果可用）
-        voices = self.tts_engine.getProperty('voices')
-        for voice in voices:
-            if 'chinese' in voice.name.lower() or 'zh' in voice.id.lower():
-                self.tts_engine.setProperty('voice', voice.id)
-                break
+        # 设置 edge-tts 男声（中文普通话男声）
+        self.voice = "zh-CN-YunxiNeural"  # 云希 - 男声
+        # 其他可选男声：
+        # "zh-CN-YunyangNeural"  # 云扬 - 男声
+        # "zh-CN-YunjianNeural"  # 云健 - 男声
 
     def clean_scene_description(self, text: str) -> str:
         """
@@ -83,9 +78,9 @@ class VideoService:
 
         return subtitles
 
-    def text_to_speech(self, text: str, output_path: str) -> float:
+    async def text_to_speech_async(self, text: str, output_path: str) -> float:
         """
-        将文本转换为语音文件
+        使用 edge-tts 将文本转换为语音文件（异步方法）
         返回音频时长（秒）
         """
         try:
@@ -95,9 +90,13 @@ class VideoService:
             # 进一步清理文本，移除可能影响TTS的字符
             clean_text = clean_text.replace('\n', ' ').replace('\r', ' ').strip()
 
-            # 生成语音文件
-            self.tts_engine.save_to_file(clean_text, output_path)
-            self.tts_engine.runAndWait()
+            if not clean_text:
+                logger.warning("清理后的文本为空，使用默认时长")
+                return 3.0
+
+            # 使用 edge-tts 生成语音
+            communicate = edge_tts.Communicate(clean_text, self.voice)
+            await communicate.save(output_path)
 
             # 使用ffmpeg获取音频时长
             probe = ffmpeg.probe(output_path)
@@ -109,6 +108,41 @@ class VideoService:
         except Exception as e:
             logger.error(f"文本转语音失败: {str(e)}")
             # 如果TTS失败，返回默认时长
+            return 3.0
+
+    def text_to_speech(self, text: str, output_path: str) -> float:
+        """
+        将文本转换为语音文件（同步方法，内部调用异步方法）
+        返回音频时长（秒）
+        """
+        try:
+            # 获取当前事件循环，如果没有则创建新的
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    # 如果事件循环正在运行，创建新线程来运行异步任务
+                    import concurrent.futures
+                    import threading
+
+                    def run_async():
+                        new_loop = asyncio.new_event_loop()
+                        asyncio.set_event_loop(new_loop)
+                        try:
+                            return new_loop.run_until_complete(self.text_to_speech_async(text, output_path))
+                        finally:
+                            new_loop.close()
+
+                    with concurrent.futures.ThreadPoolExecutor() as executor:
+                        future = executor.submit(run_async)
+                        return future.result()
+                else:
+                    return loop.run_until_complete(self.text_to_speech_async(text, output_path))
+            except RuntimeError:
+                # 没有事件循环，创建新的
+                return asyncio.run(self.text_to_speech_async(text, output_path))
+
+        except Exception as e:
+            logger.error(f"文本转语音失败: {str(e)}")
             return 3.0
 
     def get_image_dimensions(self, image_path: str) -> tuple:
@@ -347,6 +381,8 @@ class VideoService:
             audio_clips = []
             all_subtitles = []
 
+            # 关键修改：使用两阶段处理，确保音频和字幕完全同步
+
             # 第一阶段：生成所有音频文件并获取实际时长
             audio_durations = []
             scene_info_list = []
@@ -514,7 +550,7 @@ class VideoService:
 
                 # 混合原音频和BGM（BGM音量设为0.1）
                 mixed_audio = ffmpeg.filter([final_video_input.audio, bgm_input], 'amix',
-                                            inputs=2, duration='first', weights='1.0 0.3')
+                                            inputs=2, duration='first', weights='1.0 0.10')
 
                 (
                     ffmpeg
