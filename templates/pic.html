@@ -4,49 +4,214 @@
     <meta charset="UTF-8">
     <title>漫画生成页面</title>
     <style>
+        @font-face {
+            font-family: 'zpix';
+            src: url('https://cdn.jsdelivr.net/gh/SolidZORO/zpix-pixel-font@master/dist/zpix.woff2') format('woff2'),
+                 url('https://cdn.jsdelivr.net/gh/SolidZORO/zpix-pixel-font@master/dist/zpix.woff') format('woff'),
+                 url('https://cdn.jsdelivr.net/gh/SolidZORO/zpix-pixel-font@master/dist/zpix.ttf') format('truetype');
+            font-weight: normal;
+            font-style: normal;
+        }
+        /* 全局字体和背景色，像素墨水屏风格 */
+        * {
+            font-family: 'zpix', 'Courier New', monospace !important;
+        }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            margin: 40px;
-            background-color: #f4f4f9;
-            color: #333;
+            font-family: 'zpix', 'Press Start 2P', monospace;
+            margin: 20px;
+            padding-top: 60px; /* 保留顶部浮层空间 */
+            background-color: #f7f7f7;
+            color: #2c2c2c;
+            background-image:
+                radial-gradient(circle at 1px 1px, rgba(0,0,0,.15) 1px, transparent 0),
+                url("data:image/svg+xml,%3csvg width='16' height='16' viewBox='0 0 16 16' fill='none' xmlns='http://www.w3.org/2000/svg'%3e%3crect width='2' height='2' fill='%23555555'/%3e%3c/svg%3e");
+            background-repeat: repeat;
+            background-size: 20px 20px, 40px 40px;
+            line-height: 1.8;
+            position: relative;
+            overflow-x: hidden;
         }
 
-        .container {
-            max-width: 1000px;
-            margin: 0 auto;
-            background-color: #fff;
-            padding: 20px 40px;
-            border-radius: 12px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        /* 背景动画层 */
+        .background-animation {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -2;
+            pointer-events: none;
+            overflow: hidden;
         }
 
-        .header {
+        /* 像素小动物样式 */
+        .pixel-animal {
+            position: absolute;
+            width: 32px;
+            height: 32px;
+            image-rendering: pixelated;
+            opacity: 0.6;
+            animation: float 8s ease-in-out infinite;
+            will-change: transform, left, top;
+        }
+
+        /* 小猫 */
+        .pixel-cat {
+            background: url('data:image/svg+xml;utf8,<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="8" y="4" width="4" height="4" fill="%23000"/><rect x="20" y="4" width="4" height="4" fill="%23000"/><rect x="8" y="8" width="16" height="8" fill="%23000"/><rect x="12" y="12" width="2" height="2" fill="%23fff"/><rect x="18" y="12" width="2" height="2" fill="%23fff"/><rect x="14" y="14" width="4" height="2" fill="%23fff"/><rect x="6" y="16" width="20" height="8" fill="%23000"/><rect x="4" y="20" width="4" height="8" fill="%23000"/><rect x="24" y="20" width="4" height="8" fill="%23000"/><rect x="12" y="24" width="8" height="4" fill="%23000"/></svg>') no-repeat center;
+            background-size: contain;
+            animation: walk 4s linear infinite, float 8s ease-in-out infinite;
+        }
+
+        /* 小兔子 */
+        .pixel-rabbit {
+            background: url('data:image/svg+xml;utf8,<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="6" y="0" width="4" height="12" fill="%23000"/><rect x="22" y="0" width="4" height="12" fill="%23000"/><rect x="8" y="8" width="16" height="12" fill="%23000"/><rect x="10" y="12" width="2" height="2" fill="%23fff"/><rect x="20" y="12" width="2" height="2" fill="%23fff"/><rect x="14" y="14" width="4" height="2" fill="%23fff"/><rect x="4" y="20" width="6" height="8" fill="%23000"/><rect x="22" y="20" width="6" height="8" fill="%23000"/><rect x="12" y="24" width="8" height="4" fill="%23000"/></svg>') no-repeat center;
+            background-size: contain;
+            animation: hop 3s ease-in-out infinite, float 6s ease-in-out infinite;
+        }
+
+        /* 小鸟 */
+        .pixel-bird {
+            background: url('data:image/svg+xml;utf8,<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="8" y="8" width="16" height="8" fill="%23000"/><rect x="12" y="10" width="2" height="2" fill="%23fff"/><rect x="24" y="10" width="6" height="4" fill="%23000"/><rect x="2" y="12" width="6" height="4" fill="%23000"/><rect x="10" y="16" width="12" height="4" fill="%23000"/><rect x="14" y="20" width="4" height="6" fill="%23000"/></svg>') no-repeat center;
+            background-size: contain;
+            animation: fly 5s ease-in-out infinite, float 7s ease-in-out infinite;
+        }
+
+        /* 小鱼 */
+        .pixel-fish {
+            background: url('data:image/svg+xml;utf8,<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="8" y="12" width="16" height="8" fill="%23000"/><rect x="12" y="14" width="2" height="2" fill="%23fff"/><rect x="24" y="8" width="6" height="4" fill="%23000"/><rect x="24" y="20" width="6" height="4" fill="%23000"/><rect x="2" y="14" width="6" height="4" fill="%23000"/><rect x="10" y="10" width="12" height="12" fill="%23000"/></svg>') no-repeat center;
+            background-size: contain;
+            animation: swim 6s ease-in-out infinite, float 9s ease-in-out infinite;
+        }
+
+        /* 动画定义 */
+        @keyframes float {
+            0%, 100% { transform: translateY(0px) rotate(0deg); }
+            25% { transform: translateY(-20px) rotate(2deg); }
+            50% { transform: translateY(0px) rotate(0deg); }
+            75% { transform: translateY(-10px) rotate(-2deg); }
+        }
+
+        @keyframes walk {
+            0%, 100% { transform: translateX(0px) scaleX(1); }
+            50% { transform: translateX(10px) scaleX(1); }
+        }
+
+        @keyframes hop {
+            0%, 100% { transform: translateY(0px) scaleY(1); }
+            50% { transform: translateY(-15px) scaleY(1.1); }
+        }
+
+        @keyframes fly {
+            0%, 100% { transform: translateX(0px) translateY(0px) rotate(0deg); }
+            25% { transform: translateX(15px) translateY(-10px) rotate(5deg); }
+            50% { transform: translateX(0px) translateY(-5px) rotate(0deg); }
+            75% { transform: translateX(-15px) translateY(-10px) rotate(-5deg); }
+        }
+
+        @keyframes swim {
+            0%, 100% { transform: translateX(0px) scaleX(1); }
+            50% { transform: translateX(-20px) scaleX(-1); }
+        }
+
+        /* 用户信息栏浮层 - 左右布局，固定顶部 */
+        #user-info-bar {
+            position: fixed;
+            top: 10px;
+            left: 20px;
+            right: 20px;
+            z-index: 9999;
+            background-color: #e8e8e8;
+            border: 4px solid #2c2c2c;
+            box-shadow: 4px 4px 0 #333;
+            padding: 12px 24px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 20px;
-            padding-bottom: 15px;
-            border-bottom: 2px solid #eee;
+            font-size: 14px;
+            font-weight: bold;
+            color: #2c2c2c;
+            user-select: none;
+            border-radius: 0;
+            white-space: nowrap;
+            box-sizing: border-box;
         }
 
+        #user-info-left {
+            display: flex;
+            gap: 16px;
+            align-items: center;
+        }
+
+        #user-info-left span {
+            line-height: 1.8;
+        }
+
+        #logoutBtn {
+            color: #dc3545;
+            text-decoration: none;
+            border: 2px solid #dc3545;
+            padding: 4px 12px;
+            background-color: #fff;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: 'zpix', monospace;
+            border-radius: 0;
+            user-select: none;
+        }
+
+        #logoutBtn:hover {
+            background-color: #dc3545;
+            color: #fff;
+        }
+
+        /* 主容器风格 */
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background-color: #fafafa;
+            border: 4px solid #333;
+            box-shadow: 8px 8px 0px #333;
+            padding: 24px;
+            position: relative;
+            z-index: 10;
+        }
+        .container::before {
+            content: '';
+            position: absolute;
+            top: 8px; left: 8px; right: 8px; bottom: 8px;
+            border: 2px dashed #666;
+            pointer-events: none;
+        }
+
+        h1 {
+            text-align: center;
+            color: #2c2c2c;
+            margin-bottom: 24px;
+            font-size: 24px;
+            text-shadow: 2px 2px 0px #e0e0e0;
+            font-family: 'zpix', monospace;
+        }
+
+        /* 场景块 */
         .scene {
             margin: 20px 0;
-            padding: 20px;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            background-color: #fff;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-            transition: all 0.3s ease;
+            padding: 16px;
+            background-color: #f8f8f8;
+            border: 3px solid #333;
+            box-shadow: inset 4px 4px 0px #e0e0e0;
+            border-radius: 0;
+            font-family: 'zpix', monospace;
         }
-
         .scene h3 {
-            color: #333;
-            margin-bottom: 15px;
+            color: #2c2c2c;
+            margin-bottom: 12px;
+            font-size: 16px;
         }
 
         .scene-content {
             display: flex;
-            gap: 20px;
+            gap: 16px;
+            flex-wrap: wrap;
         }
 
         .description-area {
@@ -54,25 +219,33 @@
         }
 
         .description-display {
-            color: #666;
-            line-height: 1.6;
-            margin-bottom: 15px;
-            font-size: 16px;
-            padding: 10px;
-            background-color: #f8f9fa;
-            border-radius: 4px;
-            border: 1px solid #e9ecef;
+            color: #2c2c2c;
+            line-height: 1.8;
+            margin-bottom: 12px;
+            font-size: 14px;
+            padding: 12px;
+            background-color: #fafafa;
+            border: 3px solid #333;
+            box-shadow: inset 4px 4px 0px #e0e0e0;
+            font-family: 'zpix', monospace;
+            border-radius: 0;
+            min-height: 80px;
+            white-space: pre-wrap;
         }
 
         .description-edit {
             width: 100%;
             min-height: 80px;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
+            padding: 12px;
+            border: 3px solid #333;
+            box-shadow: inset 4px 4px 0px #e0e0e0;
             font-size: 14px;
             resize: vertical;
+            font-family: 'zpix', monospace;
+            border-radius: 0;
             display: none;
+            color: #2c2c2c;
+            background-color: #fafafa;
         }
 
         .image-area {
@@ -81,104 +254,114 @@
 
         .scene img {
             max-width: 100%;
-            border-radius: 4px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            border: 4px solid #333;
+            box-shadow: 8px 8px 0px #ccc;
+            image-rendering: pixelated;
+            border-radius: 0;
         }
 
         .scene-actions {
-            margin-top: 15px;
+            margin-top: 12px;
             display: flex;
-            gap: 10px;
+            gap: 8px;
             flex-wrap: wrap;
         }
 
+        /* 按钮通用像素风格 */
         button {
-            padding: 8px 16px;
-            background-color: #007bff;
-            color: white;
-            border: none;
-            cursor: pointer;
-            border-radius: 4px;
+            font-family: 'zpix', monospace !important;
             font-size: 14px;
+            padding: 8px 16px;
+            border: 3px solid #333;
+            background-color: #007bff;
+            color: #fff;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            box-shadow: 2px 2px 0px #ccc;
             transition: background-color 0.2s;
+            border-radius: 0;
+            user-select: none;
         }
-
         button:hover:not(:disabled) {
             background-color: #0056b3;
         }
-
         button:disabled {
-            background-color: #cccccc;
+            background-color: #6c757d;
             cursor: not-allowed;
         }
 
+        /* 按钮色彩调整 */
         .btn-warning {
             background-color: #ffc107;
-            color: #212529;
+            color: #2c2c2c;
+            border-color: #333;
+            box-shadow: 4px 4px 0px #b38600;
         }
-
         .btn-warning:hover:not(:disabled) {
             background-color: #e0a800;
         }
-
         .btn-success {
             background-color: #28a745;
+            border-color: #1e7e34;
+            box-shadow: 4px 4px 0px #1e7e34;
         }
-
         .btn-success:hover:not(:disabled) {
             background-color: #218838;
         }
-
         .btn-secondary {
             background-color: #6c757d;
+            border-color: #444;
+            box-shadow: 4px 4px 0px #444;
         }
-
         .btn-secondary:hover:not(:disabled) {
             background-color: #5a6268;
         }
 
+        /* 消息框明快配色 */
         .message-box {
-            padding: 15px;
-            border: 1px solid;
-            margin: 10px 0;
-            border-radius: 8px;
+            padding: 12px 16px;
+            border: 3px solid;
+            margin: 12px 0;
+            font-size: 14px;
             text-align: center;
+            position: relative;
+            font-family: 'zpix', monospace;
+            border-radius: 0;
         }
-
         .error {
-            color: #721c24;
-            background-color: #f8d7da;
-            border-color: #f5c6cb;
+            color: #fff;
+            background-color: #dc3545;
+            border-color: #a71e2a;
         }
-
         .info {
-            color: #0c5460;
-            background-color: #d1ecf1;
-            border-color: #bee5eb;
+            color: #fff;
+            background-color: #17a2b8;
+            border-color: #117a8b;
         }
-
         .success {
-            color: #155724;
-            background-color: #d4edda;
-            border-color: #c3e6cb;
+            color: #fff;
+            background-color: #28a745;
+            border-color: #1e7e34;
         }
-
         .warning {
-            color: #856404;
-            background-color: #fff3cd;
-            border-color: #ffeeba;
+            color: #2c2c2c;
+            background-color: #ffc107;
+            border-color: #d39e00;
         }
 
+        /* 进度条 */
         .progress-bar-container {
             width: 100%;
-            background-color: #e9ecef;
-            border-radius: 4px;
-            margin: 15px 0;
+            background-color: #e8e8e8;
+            border: 3px solid #333;
+            border-radius: 0;
+            margin: 12px 0;
             height: 20px;
             overflow: hidden;
             position: relative;
+            box-shadow: inset 4px 4px 0px #ccc;
         }
-
         .progress-bar {
             width: 0%;
             height: 100%;
@@ -190,127 +373,256 @@
             justify-content: center;
             font-size: 12px;
             font-weight: bold;
+            font-family: 'zpix', monospace;
+            user-select: none;
         }
 
-        .global-actions {
-            position: sticky;
-            top: 20px;
-            background-color: #fff;
-            padding: 15px;
-            border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-            margin-bottom: 20px;
-            display: flex;
-            gap: 15px;
-            flex-wrap: wrap;
-            align-items: center;
-        }
-
-        #overallProgress {
-            display: none;
-        }
-
+        /* 加载动画 - 像素风格 */
         .loading-spinner {
             display: inline-block;
             width: 16px;
             height: 16px;
-            border: 2px solid #f3f3f3;
-            border-top: 2px solid #3498db;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #007bff;
+            animation: spin 1s steps(8, end) infinite;
             margin-right: 8px;
             vertical-align: middle;
         }
-
         @keyframes spin {
-            0% {
-                transform: rotate(0deg);
-            }
-            100% {
-                transform: rotate(360deg);
-            }
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
 
+        /* 模型控制区域 */
         .model-controls {
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 12px;
             flex-wrap: wrap;
+            padding: 0;
+            font-family: 'zpix', monospace;
         }
 
-        .back-btn {
-            background-color: #6c757d;
+        /* 输入框像素风格 */
+        select, input[type="number"] {
+            padding: 8px 12px;
+            border: 3px solid #333;
+            background-color: #fff;
+            color: #2c2c2c;
+            font-size: 14px;
+            box-shadow: 2px 2px 0px #ccc;
+            font-family: 'zpix', monospace;
+            border-radius: 0;
+        }
+        select:focus, input[type="number"]:focus {
+            outline: none;
+            border-color: #007bff;
+            box-shadow: 2px 2px 0px #007bff;
         }
 
-        .back-btn:hover:not(:disabled) {
-            background-color: #5a6268;
-        }
-
-        .regeneration-settings {
+        /* sticky顶部栏背景 */
+        .global-actions {
+            position: sticky;
+            top: 20px;
+            background-color: #fafafa;
+            padding: 16px;
+            border: 4px solid #333;
+            box-shadow: 8px 8px 0px #333;
+            margin-bottom: 20px;
             display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
             align-items: center;
-            gap: 10px;
-            margin-top: 10px;
-            padding: 10px;
-            background-color: #f8f9fa;
-            border-radius: 4px;
-            border: 1px solid #e9ecef;
+            font-family: 'zpix', monospace;
+            z-index: 10;
         }
 
-        .regeneration-settings label {
-            font-size: 14px;
-            color: #333;
-            white-space: nowrap;
-        }
-
-        .regeneration-settings input {
-            width: 80px;
-            padding: 4px 8px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            font-size: 14px;
+        /* 响应式 */
+        @media (max-width: 768px) {
+            body {
+                margin: 10px;
+                padding-top: 70px;
+            }
+            .container {
+                padding: 16px;
+            }
+            .scene-content {
+                flex-direction: column;
+            }
+            .model-controls {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .scene-actions {
+                flex-direction: column;
+                gap: 8px;
+            }
+            button {
+                width: 100%;
+                box-sizing: border-box;
+            }
+            #user-info-bar {
+                left: 10px;
+                right: 10px;
+                padding: 12px 16px;
+                font-size: 12px;
+                gap: 12px;
+            }
         }
     </style>
 </head>
 <body>
-<div class="container">
-    <div class="header">
-        <h1>漫画生成页面</h1>
-        <button class="back-btn" onclick="goBack()">返回首页</button>
+
+    <!-- 背景动画层 -->
+    <div class="background-animation" id="backgroundAnimation"></div>
+
+    <!-- 用户信息栏浮层（从旧页面移植） -->
+    <div id="user-info-bar">
+        <div id="user-info-left">
+            <span id="userInfoText">加载中...</span>
+        </div>
+        <a href="#" id="logoutBtn">登出</a>
     </div>
 
-    <div class="global-actions">
-        <div class="model-controls">
-            <span>当前模型:</span>
-            <span id="currentModel">检查中...</span>
-            <button id="reloadModelBtn" class="btn-warning" onclick="showReloadModel()">重新加载模型</button>
-        </div>
-        <div id="modelReloadArea" style="display: none;">
-            <select id="modelSelect"></select>
-            <button id="confirmReloadBtn" class="btn-success" onclick="confirmReloadModel()" disabled>确认重新加载
-            </button>
-            <button class="btn-secondary" onclick="hideReloadModel()">取消</button>
+    <div class="container">
+        <div class="header">
+            <h1>漫画生成页面</h1>
+            <button class="btn-secondary" onclick="goBack()">返回首页</button>
         </div>
 
-        <!-- 新增：重新生成参数设置 -->
-        <div class="regeneration-settings">
-            <label for="regenerationSteps">重新生成迭代次数:</label>
-            <input type="number" id="regenerationSteps" value="30" min="10" max="100"
-                   title="设置重新生成图片时的迭代次数">
+        <div class="global-actions">
+            <div class="model-controls">
+                <span>当前模型:</span>
+                <span id="currentModel">检查中...</span>
+                <button id="reloadModelBtn" class="btn-warning" onclick="showReloadModel()">重新加载模型</button>
+            </div>
+            <div id="modelReloadArea" style="display: none;">
+                <select id="modelSelect"></select>
+                <button id="confirmReloadBtn" class="btn-success" onclick="confirmReloadModel()" disabled>确认重新加载
+                </button>
+                <button class="btn-secondary" onclick="hideReloadModel()">取消</button>
+            </div>
+
+            <div class="regeneration-settings">
+                <label for="regenerationSteps">重新生成迭代次数:</label>
+                <input type="number" id="regenerationSteps" value="30" min="10" max="100"
+                       title="设置重新生成图片时的迭代次数">
+            </div>
         </div>
+
+        <div id="overallProgress" class="message-box info"></div>
+        <div id="result"></div>
     </div>
-
-    <div id="overallProgress" class="message-box info"></div>
-    <div id="result"></div>
-</div>
 
 <script>
+    // === 背景动画系统类 ===
+    class BackgroundAnimationSystem {
+        constructor() {
+            this.container = document.getElementById('backgroundAnimation');
+            this.animals = [];
+            this.animalTypes = ['cat', 'rabbit', 'bird', 'fish'];
+            this.animationId = null;
+            this.init();
+        }
+
+        init() {
+            this.createAnimals();
+            this.startAnimation();
+        }
+
+        createAnimals() {
+            const animalCount = Math.floor(Math.random() * 5) + 8;
+            for (let i = 0; i < animalCount; i++) {
+                const animal = this.createAnimal();
+                this.animals.push(animal);
+                this.container.appendChild(animal.element);
+            }
+        }
+
+        createAnimal() {
+            const animalType = this.animalTypes[Math.floor(Math.random() * this.animalTypes.length)];
+            const element = document.createElement('div');
+            element.className = `pixel-animal pixel-${animalType}`;
+            const startX = Math.random() * window.innerWidth;
+            const startY = Math.random() * window.innerHeight;
+            element.style.left = startX + 'px';
+            element.style.top = startY + 'px';
+            element.style.animationDelay = Math.random() * 5 + 's';
+            const scale = 0.6 + Math.random() * 0.8;
+            element.style.transform = `scale(${scale})`;
+            return {
+                element,
+                type: animalType,
+                x: startX,
+                y: startY,
+                vx: (Math.random() - 0.5) * 2,
+                vy: (Math.random() - 0.5) * 2,
+                speed: 0.5 + Math.random() * 1.5
+            };
+        }
+
+        updateAnimal(animal) {
+            animal.x += animal.vx * animal.speed;
+            animal.y += animal.vy * animal.speed;
+            if (animal.x <= 0 || animal.x >= window.innerWidth - 32) {
+                animal.vx = -animal.vx;
+                animal.x = Math.max(0, Math.min(window.innerWidth - 32, animal.x));
+            }
+            if (animal.y <= 0 || animal.y >= window.innerHeight - 32) {
+                animal.vy = -animal.vy;
+                animal.y = Math.max(0, Math.min(window.innerHeight - 32, animal.y));
+            }
+            animal.element.style.left = animal.x + 'px';
+            animal.element.style.top = animal.y + 'px';
+
+            // 调整朝向
+            let baseScaleMatch = animal.element.style.transform.match(/scale\(([^)]+)\)/);
+            let scaleValue = baseScaleMatch ? parseFloat(baseScaleMatch[1]) : 1;
+            if (animal.vx > 0) {
+                animal.element.style.transform = `scale(${scaleValue})`;
+            } else if (animal.vx < 0) {
+                animal.element.style.transform = `scaleX(-1) scale(${scaleValue})`;
+            }
+        }
+
+        animate() {
+            this.animals.forEach(animal => this.updateAnimal(animal));
+            this.animationId = requestAnimationFrame(() => this.animate());
+        }
+
+        startAnimation() {
+            if (!this.animationId) {
+                this.animate();
+            }
+        }
+
+        stopAnimation() {
+            if (this.animationId) {
+                cancelAnimationFrame(this.animationId);
+                this.animationId = null;
+            }
+        }
+
+        onResize() {
+            this.animals.forEach(animal => {
+                animal.x = Math.min(animal.x, window.innerWidth - 32);
+                animal.y = Math.min(animal.y, window.innerHeight - 32);
+            });
+        }
+    }
+
+    // 页面加载后启动背景动画
+    window.addEventListener('load', () => {
+        const backgroundAnimationSystem = new BackgroundAnimationSystem();
+        window.addEventListener('resize', () => backgroundAnimationSystem.onResize());
+    });
+
     const token = localStorage.getItem('accessToken');
     let scenes = [];
     let currentModel = null;
     let isGenerating = false;
     let currentUser = null;
-    let currentSessionId = null; // 新增：用于存储当前会话ID
+    let currentSessionId = null;
 
     window.addEventListener('load', async function () {
         if (!token) {
@@ -318,16 +630,7 @@
             return;
         }
 
-        // 增加用户信息栏的 HTML 到 body
-        // 确保这个div的ID是唯一的，并且只在这里创建一次
-        const userInfoBar = document.createElement('div');
-        userInfoBar.id = 'user-info-bar';
-        // 样式可以从CSS中加载，或者保持内联，但确保不重复
-        userInfoBar.style.cssText = 'text-align: right; padding: 0 40px 10px; border-bottom: 1px solid #eee; margin-bottom: 20px;';
-        userInfoBar.innerHTML = `<span id="userInfoText">加载中...</span><a href="#" id="logoutBtn" style="margin-left: 15px;">登出</a>`;
-        document.body.insertBefore(userInfoBar, document.querySelector('.container'));
-
-        // 绑定登出事件
+        // 用户信息栏登出事件
         document.getElementById('logoutBtn').addEventListener('click', (e) => {
             e.preventDefault();
             localStorage.removeItem('accessToken');
@@ -482,7 +785,7 @@
         return `${mins}分 ${secs.toString().padStart(2, '0')}秒`;
     }
 
-    // 新增：保存场景描述到服务器
+   // 保存场景描述到服务器
     async function saveSceneDescriptions(sessionId, descriptions) {
         try {
             const response = await fetch('/save-scene-descriptions', {
@@ -619,7 +922,6 @@
                                     overallProgressDiv.innerHTML = `已完成 ${progressState.scenesDone}/${progressState.totalScenes}。预计剩余: ${formatTime(avgTimePerScene * remainingScenes)}`;
                                     break;
                                 }
-                                    // 在现有的 case 'all_images_generated': 部分修改如下：
                                 case 'all_images_generated': {
                                     // 保存场景描述到服务器
                                     if (currentSessionId && scenes.length > 0) {
@@ -634,7 +936,6 @@
                                     createVideoBtn.style.padding = '12px 24px';
 
                                     createVideoBtn.onclick = async function () {
-                                        // 显示进度信息
                                         const progressInfo = document.createElement('div');
                                         progressInfo.className = 'message-box info';
                                         progressInfo.style.marginTop = '15px';
@@ -659,7 +960,6 @@
                                             if (result.success) {
                                                 progressInfo.remove();
 
-                                                // 创建视频链接容器
                                                 const videoContainer = document.createElement('div');
                                                 videoContainer.style.marginTop = '20px';
                                                 videoContainer.style.padding = '20px';
@@ -737,6 +1037,7 @@
                                     }, 5000);
 
                                     getUserInfo();
+                                    isGenerating = false;
                                     break;
 
                                 case 'error':
@@ -744,6 +1045,7 @@
                                     overallProgressDiv.innerHTML = `发生错误: ${data.message}`;
 
                                     getUserInfo();
+                                    isGenerating = false;
                                     break;
                             }
                         }
@@ -816,61 +1118,61 @@
         cancelBtn.style.display = 'none';
     }
 
-async function regenerateImage(sceneIndex) {
-    const description = scenes[sceneIndex];
-    if (!description) {
-        alert('请先确保场景描述不为空！');
-        return;
-    }
-
-    const regenerationSteps = parseInt(document.getElementById('regenerationSteps').value) || 30;
-
-    const regenBtn = document.getElementById(`regen-btn-${sceneIndex}`);
-    const imageContainer = document.getElementById(`image-container-${sceneIndex}`);
-    const progressContainer = document.getElementById(`progress-container-${sceneIndex}`);
-
-    regenBtn.disabled = true;
-    regenBtn.innerHTML = '<span class="loading-spinner"></span>重新生成中...';
-
-    imageContainer.style.display = 'none';
-    progressContainer.style.display = 'block';
-    const progressBar = document.getElementById(`progress-bar-${sceneIndex}`);
-    progressBar.style.width = '0%';
-    progressBar.textContent = '准备中...';
-
-    try {
-        const response = await fetch('/regenerate-image', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-                description: description,
-                sceneIndex: sceneIndex,
-                steps: regenerationSteps,
-                session_id: currentSessionId  // 新增：传递当前会话ID
-            })
-        });
-
-        const result = await response.json();
-
-        if (result.success) {
-            progressContainer.style.display = 'none';
-            imageContainer.style.display = 'block';
-            imageContainer.querySelector('img').src = result.image_url;
-        } else {
-            alert(`重新生成失败: ${result.message}`);
-            progressContainer.style.display = 'none';
-            imageContainer.style.display = 'block';
+    async function regenerateImage(sceneIndex) {
+        const description = scenes[sceneIndex];
+        if (!description) {
+            alert('请先确保场景描述不为空！');
+            return;
         }
 
-    } catch (error) {
-        alert(`重新生成请求失败: ${error.message}`);
-        progressContainer.style.display = 'none';
-        imageContainer.style.display = 'block';
-    } finally {
-        regenBtn.disabled = false;
-        regenBtn.innerHTML = '重新生成图片';
+        const regenerationSteps = parseInt(document.getElementById('regenerationSteps').value) || 30;
+
+        const regenBtn = document.getElementById(`regen-btn-${sceneIndex}`);
+        const imageContainer = document.getElementById(`image-container-${sceneIndex}`);
+        const progressContainer = document.getElementById(`progress-container-${sceneIndex}`);
+
+        regenBtn.disabled = true;
+        regenBtn.innerHTML = '<span class="loading-spinner"></span>重新生成中...';
+
+        imageContainer.style.display = 'none';
+        progressContainer.style.display = 'block';
+        const progressBar = document.getElementById(`progress-bar-${sceneIndex}`);
+        progressBar.style.width = '0%';
+        progressBar.textContent = '准备中...';
+
+        try {
+            const response = await fetch('/regenerate-image', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    description: description,
+                    sceneIndex: sceneIndex,
+                    steps: regenerationSteps,
+                    session_id: currentSessionId  // 新增：传递当前会话ID
+                })
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                progressContainer.style.display = 'none';
+                imageContainer.style.display = 'block';
+                imageContainer.querySelector('img').src = result.image_url;
+            } else {
+                alert(`重新生成失败: ${result.message}`);
+                progressContainer.style.display = 'none';
+                imageContainer.style.display = 'block';
+            }
+
+        } catch (error) {
+            alert(`重新生成请求失败: ${error.message}`);
+            progressContainer.style.display = 'none';
+            imageContainer.style.display = 'block';
+        } finally {
+            regenBtn.disabled = false;
+            regenBtn.innerHTML = '重新生成图片';
+        }
     }
-}
 </script>
 </body>
 </html>

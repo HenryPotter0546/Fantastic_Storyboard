@@ -3,56 +3,226 @@
 <head>
     <meta charset="UTF-8">
     <title>登录 - 小说转漫画服务</title>
+    <!-- NES.css 框架 -->
+    <link href="https://unpkg.com/nes.css@latest/css/nes.min.css" rel="stylesheet" />
+    
     <style>
+        @font-face {
+            font-family: 'zpix';
+            src: url('https://cdn.jsdelivr.net/gh/SolidZORO/zpix-pixel-font@master/dist/zpix.woff2') format('woff2'),
+                 url('https://cdn.jsdelivr.net/gh/SolidZORO/zpix-pixel-font@master/dist/zpix.woff') format('woff'),
+                 url('https://cdn.jsdelivr.net/gh/SolidZORO/zpix-pixel-font@master/dist/zpix.ttf') format('truetype');
+            font-weight: normal;
+            font-style: normal;
+        }
+
+        /* 全局样式 - 电子书墨水屏配色 */
+        * {
+            font-family: 'zpix', 'Courier New', monospace !important;
+        }
+
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            font-family: 'zpix', 'Press Start 2P', monospace;
             margin: 40px;
-            background-color: #f4f4f9;
-            color: #333;
+            padding-top: 60px; /* 保留顶部浮层高度，避免内容被遮挡 */
+            background-color: #f7f7f7;
+            color: #2c2c2c;
+            background-image: 
+                radial-gradient(circle at 1px 1px, rgba(0,0,0,.15) 1px, transparent 0),
+                url("data:image/svg+xml,%3csvg width='16' height='16' viewBox='0 0 16 16' fill='none' xmlns='http://www.w3.org/2000/svg'%3e%3crect width='2' height='2' fill='%23555555'/%3e%3c/svg%3e");
+            background-repeat: repeat;
+            background-size: 20px 20px, 40px 40px;
+            line-height: 1.8;
             display: flex;
             align-items: center;
             justify-content: center;
             min-height: 100vh;
+            position: relative;
+            overflow-x: hidden;
         }
 
+        /* 背景动画层 */
+        .background-animation {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -2;
+            pointer-events: none;
+            overflow: hidden;
+        }
+
+        /* 像素小动物样式 */
+        .pixel-animal {
+            position: absolute;
+            width: 32px;
+            height: 32px;
+            image-rendering: pixelated;
+            opacity: 0.6;
+            animation: float 8s ease-in-out infinite;
+            will-change: transform, left, top;
+        }
+
+        /* 小猫 */
+        .pixel-cat {
+            background: url('data:image/svg+xml;utf8,<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="8" y="4" width="4" height="4" fill="%23000"/><rect x="20" y="4" width="4" height="4" fill="%23000"/><rect x="8" y="8" width="16" height="8" fill="%23000"/><rect x="12" y="12" width="2" height="2" fill="%23fff"/><rect x="18" y="12" width="2" height="2" fill="%23fff"/><rect x="14" y="14" width="4" height="2" fill="%23fff"/><rect x="6" y="16" width="20" height="8" fill="%23000"/><rect x="4" y="20" width="4" height="8" fill="%23000"/><rect x="24" y="20" width="4" height="8" fill="%23000"/><rect x="12" y="24" width="8" height="4" fill="%23000"/></svg>') no-repeat center;
+            background-size: contain;
+            animation: walk 4s linear infinite, float 8s ease-in-out infinite;
+        }
+
+        /* 小兔子 */
+        .pixel-rabbit {
+            background: url('data:image/svg+xml;utf8,<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="6" y="0" width="4" height="12" fill="%23000"/><rect x="22" y="0" width="4" height="12" fill="%23000"/><rect x="8" y="8" width="16" height="12" fill="%23000"/><rect x="10" y="12" width="2" height="2" fill="%23fff"/><rect x="20" y="12" width="2" height="2" fill="%23fff"/><rect x="14" y="14" width="4" height="2" fill="%23fff"/><rect x="4" y="20" width="6" height="8" fill="%23000"/><rect x="22" y="20" width="6" height="8" fill="%23000"/><rect x="12" y="24" width="8" height="4" fill="%23000"/></svg>') no-repeat center;
+            background-size: contain;
+            animation: hop 3s ease-in-out infinite, float 6s ease-in-out infinite;
+        }
+
+        /* 小鸟 */
+        .pixel-bird {
+            background: url('data:image/svg+xml;utf8,<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="8" y="8" width="16" height="8" fill="%23000"/><rect x="12" y="10" width="2" height="2" fill="%23fff"/><rect x="24" y="10" width="6" height="4" fill="%23000"/><rect x="2" y="12" width="6" height="4" fill="%23000"/><rect x="10" y="16" width="12" height="4" fill="%23000"/><rect x="14" y="20" width="4" height="6" fill="%23000"/></svg>') no-repeat center;
+            background-size: contain;
+            animation: fly 5s ease-in-out infinite, float 7s ease-in-out infinite;
+        }
+
+        /* 小鱼 */
+        .pixel-fish {
+            background: url('data:image/svg+xml;utf8,<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="8" y="12" width="16" height="8" fill="%23000"/><rect x="12" y="14" width="2" height="2" fill="%23fff"/><rect x="24" y="8" width="6" height="4" fill="%23000"/><rect x="24" y="20" width="6" height="4" fill="%23000"/><rect x="2" y="14" width="6" height="4" fill="%23000"/><rect x="10" y="10" width="12" height="12" fill="%23000"/></svg>') no-repeat center;
+            background-size: contain;
+            animation: swim 6s ease-in-out infinite, float 9s ease-in-out infinite;
+        }
+
+        /* 动画定义 */
+        @keyframes float {
+            0%, 100% { transform: translateY(0px) rotate(0deg); }
+            25% { transform: translateY(-20px) rotate(2deg); }
+            50% { transform: translateY(0px) rotate(0deg); }
+            75% { transform: translateY(-10px) rotate(-2deg); }
+        }
+
+        @keyframes walk {
+            0%, 100% { transform: translateX(0px) scaleX(1); }
+            50% { transform: translateX(10px) scaleX(1); }
+        }
+
+        @keyframes hop {
+            0%, 100% { transform: translateY(0px) scaleY(1); }
+            50% { transform: translateY(-15px) scaleY(1.1); }
+        }
+
+        @keyframes fly {
+            0%, 100% { transform: translateX(0px) translateY(0px) rotate(0deg); }
+            25% { transform: translateX(15px) translateY(-10px) rotate(5deg); }
+            50% { transform: translateX(0px) translateY(-5px) rotate(0deg); }
+            75% { transform: translateX(-15px) translateY(-10px) rotate(-5deg); }
+        }
+
+        @keyframes swim {
+            0%, 100% { transform: translateX(0px) scaleX(1); }
+            50% { transform: translateX(-20px) scaleX(-1); }
+        }
+
+        /* 新增像素风装饰元素 */
+        body::before {
+            content: "";
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            width: 64px;
+            height: 64px;
+            background: url('data:image/svg+xml;utf8,<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="0" y="0" width="16" height="16" fill="%23333"/><rect x="16" y="16" width="16" height="16" fill="%23666"/><rect x="32" y="32" width="16" height="16" fill="%23999"/><rect x="48" y="48" width="16" height="16" fill="%23ccc"/></svg>') no-repeat center;
+            image-rendering: pixelated;
+            opacity: 0.2;
+            pointer-events: none;
+            z-index: -1;
+        }
+        body::after {
+            content: "";
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 96px;
+            height: 96px;
+            background: url('data:image/svg+xml;utf8,<svg width="96" height="96" viewBox="0 0 96 96" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="0" y="0" width="24" height="24" fill="%23222"/><rect x="24" y="24" width="24" height="24" fill="%23555"/><rect x="48" y="48" width="24" height="24" fill="%23888"/><rect x="72" y="72" width="24" height="24" fill="%23bbb"/></svg>') no-repeat center;
+            image-rendering: pixelated;
+            opacity: 0.15;
+            pointer-events: none;
+            z-index: -1;
+        }
+
+        /* 主容器 - 墨水屏风格 */
         .container {
             max-width: 450px;
             width: 100%;
             margin: 0 auto;
-            background-color: #fff;
+            background-color: #fafafa;
+            border: 4px solid #333;
+            box-shadow: 8px 8px 0px #333;
             padding: 40px;
-            border-radius: 12px;
-            box-shadow: 0 4px A12px rgba(0, 0, 0, 0.08);
             text-align: center;
+            position: relative;
+            z-index: 10; /* 确保浮层在背景动画之上 */
         }
 
+        .container::before {
+            content: '';
+            position: absolute;
+            top: 8px;
+            left: 8px;
+            right: 8px;
+            bottom: 8px;
+            border: 2px dashed #666;
+            pointer-events: none;
+        }
+
+        /* 标题样式 */
         h1, h2 {
-            color: #333;
+            color: #2c2c2c;
+            font-size: 20px;
+            text-shadow: 2px 2px 0px #e0e0e0;
+            margin-bottom: 24px;
         }
 
+        /* 输入框样式 - 像素风格 */
         input[type="text"],
         input[type="password"] {
             width: 100%;
-            padding: 12px;
+            padding: 12px 16px;
             margin: 10px 0;
-            border: 1px solid #ddd;
-            border-radius: 8px;
+            background-color: #f5f5f5;
+            border: 3px solid #333;
+            box-shadow: inset 4px 4px 0px #e0e0e0;
+            font-size: 14px;
             box-sizing: border-box;
-            font-size: 16px;
+            color: #2c2c2c;
         }
 
+        input[type="text"]:focus,
+        input[type="password"]:focus {
+            outline: none;
+            border-color: #007bff;
+            box-shadow: inset 4px 4px 0px #cce7ff;
+        }
+
+        input[type="text"]::placeholder,
+        input[type="password"]::placeholder {
+            color: #666;
+        }
+
+        /* 按钮样式 - 使用NES.css类并自定义颜色 */
         button {
             width: 100%;
-            padding: 12px 20px;
+            padding: 12px 16px;
             background-color: #007bff;
-            color: white;
-            border: none;
+            color: #fff;
+            border: 3px solid #333;
             cursor: pointer;
-            border-radius: 8px;
-            font-size: 16px;
+            font-size: 14px;
             font-weight: bold;
-            transition: background-color 0.2s;
             margin-top: 10px;
+            position: relative;
+            text-transform: uppercase;
+            letter-spacing: 1px;
         }
 
         button:hover:not(:disabled) {
@@ -60,82 +230,257 @@
         }
 
         button:disabled {
-            background-color: #cccccc;
+            background-color: #6c757d;
             cursor: not-allowed;
         }
 
+        /* 表单切换区域 */
         .form-switcher {
             margin-top: 20px;
-            font-size: 14px;
+            font-size: 12px;
+            color: #2c2c2c;
         }
         
         .form-switcher a {
             color: #007bff;
             text-decoration: none;
             font-weight: bold;
+            padding: 2px 4px;
+            border: 2px solid transparent;
+            transition: all 0.2s;
         }
 
         .form-switcher a:hover {
-            text-decoration: underline;
+            background-color: #007bff;
+            color: #fff;
+            border-color: #007bff;
         }
-        
+
+        /* 消息框 - 明快配色 */
         #message-box {
             margin-top: 20px;
-            padding: 15px;
-            border: 1px solid;
-            border-radius: 8px;
+            padding: 12px 16px;
+            border: 3px solid;
             text-align: center;
-            display: none; /* Initially hidden */
+            display: none;
+            font-size: 12px;
+            position: relative;
+            font-family: 'zpix', monospace;
         }
-        .error { color: #721c24; background-color: #f8d7da; border-color: #f5c6cb; }
-        .success { color: #155724; background-color: #d4edda; border-color: #c3e6cb; }
-        
+
+        .error {
+            color: #fff;
+            background-color: #dc3545;
+            border-color: #a71e2a;
+        }
+
+        .success {
+            color: #fff;
+            background-color: #28a745;
+            border-color: #1e7e34;
+        }
+
+        /* 项目标识图片 */
+        .project-logo {
+            max-width: 150px;
+            display: block;
+            margin: 0 auto 20px auto;
+            border: 4px solid #333;
+            box-shadow: 4px 4px 0px #ccc;
+            image-rendering: pixelated;
+        }
+
+        /* 加载动画 - 像素风格 */
+        .loading-spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #fff;
+            animation: spin 1s steps(8, end) infinite;
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* 响应式设计 */
+        @media (max-width: 768px) {
+            body {
+                margin: 20px;
+                padding-top: 60px;
+            }
+            
+            .container {
+                padding: 24px;
+            }
+            
+            h2 {
+                font-size: 18px;
+            }
+        }
+
+        /* 隐藏元素 */
+        .hidden {
+            display: none !important;
+        }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <img src="/static/ThePromisedLand.png" alt="项目标识"
-         style="max-width: 150px; display: block; margin: 0 auto 20px auto; border-radius: 8px;">
-    
-    <!-- 登录表单容器 -->
-    <div id="login-container">
-        <h2>欢迎回来</h2>
-        <form id="loginForm">
-            <input type="text" id="loginUser" placeholder="用户名" required>
-            <input type="password" id="loginPass" placeholder="密码" required>
-            <button type="submit">登录</button>
-        </form>
-        <div class="form-switcher">
-            <span>没有账户？ <a href="#" id="showRegisterLink">立即注册</a></span>
-        </div>
-    </div>
+    <!-- 背景动画层 -->
+    <div class="background-animation" id="backgroundAnimation"></div>
 
-    <!-- 注册表单容器 (默认隐藏) -->
-    <div id="register-container" style="display:none;">
-        <h2>创建新账户</h2>
-        <form id="registerForm">
-            <input type="text" id="regUser" placeholder="设置用户名" required>
-            <input type="password" id="regPass" placeholder="设置密码" required>
-            <button type="submit">注册</button>
-        </form>
-        <div class="form-switcher">
-            <span>已有账户？ <a href="#" id="showLoginLink">返回登录</a></span>
+    <div class="container nes-container with-title">
+        <p class="title">像素漫画工坊</p>
+        <img src="/static/ThePromisedLand.png" alt="项目标识" class="project-logo">
+        
+        <!-- 登录表单容器 -->
+        <div id="login-container">
+            <h2>欢迎回来</h2>
+            <form id="loginForm">
+                <input type="text" id="loginUser" class="nes-input" placeholder="用户名" required>
+                <input type="password" id="loginPass" class="nes-input" placeholder="密码" required>
+                <button type="submit" class="nes-btn is-primary">登录</button>
+            </form>
+            <div class="form-switcher">
+                <span>没有账户？ <a href="#" id="showRegisterLink">立即注册</a></span>
+            </div>
         </div>
-    </div>
 
-    <!-- 用于显示反馈信息 -->
-    <div id="message-box"></div>
-</div>
+        <!-- 注册表单容器 (默认隐藏) -->
+        <div id="register-container" style="display:none;">
+            <h2>创建新账户</h2>
+            <form id="registerForm">
+                <input type="text" id="regUser" class="nes-input" placeholder="设置用户名" required>
+                <input type="password" id="regPass" class="nes-input" placeholder="设置密码" required>
+                <button type="submit" class="nes-btn is-primary">注册</button>
+            </form>
+            <div class="form-switcher">
+                <span>已有账户？ <a href="#" id="showLoginLink">返回登录</a></span>
+            </div>
+        </div>
+
+        <!-- 用于显示反馈信息 -->
+        <div id="message-box" class="nes-container"></div>
+    </div>
 
 <script>
+    // === 背景动画系统类 ===
+    class BackgroundAnimationSystem {
+        constructor() {
+            this.container = document.getElementById('backgroundAnimation');
+            this.animals = [];
+            this.animalTypes = ['cat', 'rabbit', 'bird', 'fish'];
+            this.animationId = null;
+            this.init();
+        }
+
+        init() {
+            this.createAnimals();
+            this.startAnimation();
+        }
+
+        createAnimals() {
+            const animalCount = Math.floor(Math.random() * 5) + 8;
+            for (let i = 0; i < animalCount; i++) {
+                const animal = this.createAnimal();
+                this.animals.push(animal);
+                this.container.appendChild(animal.element);
+            }
+        }
+
+        createAnimal() {
+            const animalType = this.animalTypes[Math.floor(Math.random() * this.animalTypes.length)];
+            const element = document.createElement('div');
+            element.className = `pixel-animal pixel-${animalType}`;
+            const startX = Math.random() * window.innerWidth;
+            const startY = Math.random() * window.innerHeight;
+            element.style.left = startX + 'px';
+            element.style.top = startY + 'px';
+            element.style.animationDelay = Math.random() * 5 + 's';
+            const scale = 0.6 + Math.random() * 0.8;
+            element.style.transform = `scale(${scale})`;
+            return {
+                element,
+                type: animalType,
+                x: startX,
+                y: startY,
+                vx: (Math.random() - 0.5) * 2,
+                vy: (Math.random() - 0.5) * 2,
+                speed: 0.5 + Math.random() * 1.5
+            };
+        }
+
+        updateAnimal(animal) {
+            animal.x += animal.vx * animal.speed;
+            animal.y += animal.vy * animal.speed;
+            if (animal.x <= 0 || animal.x >= window.innerWidth - 32) {
+                animal.vx = -animal.vx;
+                animal.x = Math.max(0, Math.min(window.innerWidth - 32, animal.x));
+            }
+            if (animal.y <= 0 || animal.y >= window.innerHeight - 32) {
+                animal.vy = -animal.vy;
+                animal.y = Math.max(0, Math.min(window.innerHeight - 32, animal.y));
+            }
+            animal.element.style.left = animal.x + 'px';
+            animal.element.style.top = animal.y + 'px';
+
+            // 调整朝向
+            // 保证不会重复添加 scaleX(-1)
+            let baseScale = animal.element.style.transform.match(/scale\(([^)]+)\)/);
+            let scaleValue = baseScale ? parseFloat(baseScale[1]) : 1;
+            if (animal.vx > 0) {
+                animal.element.style.transform = `scale(${scaleValue})`;
+            } else if (animal.vx < 0) {
+                animal.element.style.transform = `scaleX(-1) scale(${scaleValue})`;
+            }
+        }
+
+        animate() {
+            this.animals.forEach(animal => this.updateAnimal(animal));
+            this.animationId = requestAnimationFrame(() => this.animate());
+        }
+
+        startAnimation() {
+            if (!this.animationId) {
+                this.animate();
+            }
+        }
+
+        stopAnimation() {
+            if (this.animationId) {
+                cancelAnimationFrame(this.animationId);
+                this.animationId = null;
+            }
+        }
+
+        onResize() {
+            this.animals.forEach(animal => {
+                animal.x = Math.min(animal.x, window.innerWidth - 32);
+                animal.y = Math.min(animal.y, window.innerHeight - 32);
+            });
+        }
+    }
+
+    // 页面加载后启动背景动画
+    window.addEventListener('load', () => {
+        const backgroundAnimationSystem = new BackgroundAnimationSystem();
+        window.addEventListener('resize', () => backgroundAnimationSystem.onResize());
+    });
+
+
+    // --- 登录/注册表单切换及逻辑 ---
     const loginContainer = document.getElementById('login-container');
     const registerContainer = document.getElementById('register-container');
     const showRegisterLink = document.getElementById('showRegisterLink');
     const showLoginLink = document.getElementById('showLoginLink');
     const messageBox = document.getElementById('message-box');
 
-    // --- 表单切换逻辑 ---
+    // 表单切换
     showRegisterLink.addEventListener('click', (e) => {
         e.preventDefault();
         loginContainer.style.display = 'none';
@@ -152,7 +497,7 @@
 
     function showMessage(message, type) {
         messageBox.textContent = message;
-        messageBox.className = `message-box ${type}`;
+        messageBox.className = `nes-container ${type}`;
         messageBox.style.display = 'block';
     }
 
@@ -160,14 +505,13 @@
         messageBox.style.display = 'none';
     }
 
-    // --- 登录表单提交逻辑 ---
+    // 登录表单提交逻辑
     document.getElementById('loginForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         const loginButton = e.target.querySelector('button');
         loginButton.disabled = true;
-        loginButton.textContent = '登录中...';
+        loginButton.innerHTML = '<span class="loading-spinner"></span>登录中...';
 
-        // FastAPI 的 OAuth2PasswordRequestForm 需要 FormData 格式
         const formData = new FormData();
         formData.append('username', document.getElementById('loginUser').value);
         formData.append('password', document.getElementById('loginPass').value);
@@ -194,12 +538,12 @@
         }
     });
     
-    // --- 注册表单提交逻辑 ---
+    // 注册表单提交逻辑
     document.getElementById('registerForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         const registerButton = e.target.querySelector('button');
         registerButton.disabled = true;
-        registerButton.textContent = '注册中...';
+        registerButton.innerHTML = '<span class="loading-spinner"></span>注册中...';
 
         const userData = {
             username: document.getElementById('regUser').value,
@@ -238,7 +582,6 @@
     if (urlParams.get('session') === 'expired') {
         showMessage('您的会话已过期，请重新登录。', 'error');
     }
-
 </script>
 </body>
 </html>

@@ -2,150 +2,433 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>小说转漫画服务</title>
+    <title>小说转漫画服务 - 像素风格</title>
+    <!-- NES.css 框架 -->
+    <link href="https://unpkg.com/nes.css@latest/css/nes.min.css" rel="stylesheet" />
+    
     <style>
+        @font-face {
+            font-family: 'zpix';
+            src: url('https://cdn.jsdelivr.net/gh/SolidZORO/zpix-pixel-font@master/dist/zpix.woff2') format('woff2'),
+                 url('https://cdn.jsdelivr.net/gh/SolidZORO/zpix-pixel-font@master/dist/zpix.woff') format('woff'),
+                 url('https://cdn.jsdelivr.net/gh/SolidZORO/zpix-pixel-font@master/dist/zpix.ttf') format('truetype');
+            font-weight: normal;
+            font-style: normal;
+        }
+        /* 全局样式 - 电子书墨水屏配色 */
+        * {
+            font-family: 'zpix', 'Courier New', monospace !important;
+        }
+
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            margin: 40px;
-            background-color: #f4f4f9;
-            color: #333;
+            font-family: 'zpix', 'Press Start 2P', monospace;
+            margin: 0;
+            padding-top: 60px; /* 留出顶部浮层高度，防止内容被遮挡 */
+            background-color: #f7f7f7;
+            color: #2c2c2c;
+            background-image: 
+                radial-gradient(circle at 1px 1px, rgba(0,0,0,.15) 1px, transparent 0),
+                url("data:image/svg+xml,%3csvg width='16' height='16' viewBox='0 0 16 16' fill='none' xmlns='http://www.w3.org/2000/svg'%3e%3crect width='2' height='2' fill='%23555555'/%3e%3c/svg%3e");
+            background-repeat: repeat;
+            background-size: 20px 20px, 40px 40px;
+            line-height: 1.8;
+            position: relative;
+            overflow-x: hidden;
         }
 
-        .container {
-            max-width: 800px;
-            margin: 0 auto;
-            background-color: #fff;
-            padding: 20px 40px;
-            border-radius: 12px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-        }
-
-        textarea {
+        /* 背景动画层 */
+        .background-animation {
+            position: fixed;
+            top: 0;
+            left: 0;
             width: 100%;
-            height: 200px;
-            margin: 10px 0;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            font-size: 16px;
-            resize: vertical;
+            height: 100%;
+            z-index: -2;
+            pointer-events: none;
+            overflow: hidden;
+        }
+
+        /* 像素小动物样式 */
+        .pixel-animal {
+            position: absolute;
+            width: 32px;
+            height: 32px;
+            image-rendering: pixelated;
+            opacity: 0.6;
+            animation: float 8s ease-in-out infinite;
+        }
+
+        /* 小猫 */
+        .pixel-cat {
+            background: url('data:image/svg+xml;utf8,<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="8" y="4" width="4" height="4" fill="%23000"/><rect x="20" y="4" width="4" height="4" fill="%23000"/><rect x="8" y="8" width="16" height="8" fill="%23000"/><rect x="12" y="12" width="2" height="2" fill="%23fff"/><rect x="18" y="12" width="2" height="2" fill="%23fff"/><rect x="14" y="14" width="4" height="2" fill="%23fff"/><rect x="6" y="16" width="20" height="8" fill="%23000"/><rect x="4" y="20" width="4" height="8" fill="%23000"/><rect x="24" y="20" width="4" height="8" fill="%23000"/><rect x="12" y="24" width="8" height="4" fill="%23000"/></svg>') no-repeat center;
+            background-size: contain;
+            animation: walk 4s linear infinite, float 8s ease-in-out infinite;
+        }
+
+        /* 小兔子 */
+        .pixel-rabbit {
+            background: url('data:image/svg+xml;utf8,<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="6" y="0" width="4" height="12" fill="%23000"/><rect x="22" y="0" width="4" height="12" fill="%23000"/><rect x="8" y="8" width="16" height="12" fill="%23000"/><rect x="10" y="12" width="2" height="2" fill="%23fff"/><rect x="20" y="12" width="2" height="2" fill="%23fff"/><rect x="14" y="14" width="4" height="2" fill="%23fff"/><rect x="4" y="20" width="6" height="8" fill="%23000"/><rect x="22" y="20" width="6" height="8" fill="%23000"/><rect x="12" y="24" width="8" height="4" fill="%23000"/></svg>') no-repeat center;
+            background-size: contain;
+            animation: hop 3s ease-in-out infinite, float 6s ease-in-out infinite;
+        }
+
+        /* 小鸟 */
+        .pixel-bird {
+            background: url('data:image/svg+xml;utf8,<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="8" y="8" width="16" height="8" fill="%23000"/><rect x="12" y="10" width="2" height="2" fill="%23fff"/><rect x="24" y="10" width="6" height="4" fill="%23000"/><rect x="2" y="12" width="6" height="4" fill="%23000"/><rect x="10" y="16" width="12" height="4" fill="%23000"/><rect x="14" y="20" width="4" height="6" fill="%23000"/></svg>') no-repeat center;
+            background-size: contain;
+            animation: fly 5s ease-in-out infinite, float 7s ease-in-out infinite;
+        }
+
+        /* 小鱼 */
+        .pixel-fish {
+            background: url('data:image/svg+xml;utf8,<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="8" y="12" width="16" height="8" fill="%23000"/><rect x="12" y="14" width="2" height="2" fill="%23fff"/><rect x="24" y="8" width="6" height="4" fill="%23000"/><rect x="24" y="20" width="6" height="4" fill="%23000"/><rect x="2" y="14" width="6" height="4" fill="%23000"/><rect x="10" y="10" width="12" height="12" fill="%23000"/></svg>') no-repeat center;
+            background-size: contain;
+            animation: swim 6s ease-in-out infinite, float 9s ease-in-out infinite;
+        }
+
+        /* 动画定义 */
+        @keyframes float {
+            0%, 100% { transform: translateY(0px) rotate(0deg); }
+            25% { transform: translateY(-20px) rotate(2deg); }
+            50% { transform: translateY(0px) rotate(0deg); }
+            75% { transform: translateY(-10px) rotate(-2deg); }
+        }
+
+        @keyframes walk {
+            0%, 100% { transform: translateX(0px) scaleX(1); }
+            50% { transform: translateX(10px) scaleX(1); }
+        }
+
+        @keyframes hop {
+            0%, 100% { transform: translateY(0px) scaleY(1); }
+            50% { transform: translateY(-15px) scaleY(1.1); }
+        }
+
+        @keyframes fly {
+            0%, 100% { transform: translateX(0px) translateY(0px) rotate(0deg); }
+            25% { transform: translateX(15px) translateY(-10px) rotate(5deg); }
+            50% { transform: translateX(0px) translateY(-5px) rotate(0deg); }
+            75% { transform: translateX(-15px) translateY(-10px) rotate(-5deg); }
+        }
+
+        @keyframes swim {
+            0%, 100% { transform: translateX(0px) scaleX(1); }
+            50% { transform: translateX(-20px) scaleX(-1); }
+        }
+
+        /* 背景漂浮动画 */
+        @keyframes backgroundFloat {
+            0% { transform: translateX(-100px) translateY(0px); }
+            100% { transform: translateX(calc(100vw + 100px)) translateY(0px); }
+        }
+
+        /* 新增像素风装饰元素 */
+        body::before {
+            content: "";
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            width: 64px;
+            height: 64px;
+            background: url('data:image/svg+xml;utf8,<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="0" y="0" width="16" height="16" fill="%23333"/><rect x="16" y="16" width="16" height="16" fill="%23666"/><rect x="32" y="32" width="16" height="16" fill="%23999"/><rect x="48" y="48" width="16" height="16" fill="%23ccc"/></svg>') no-repeat center;
+            image-rendering: pixelated;
+            opacity: 0.2;
+            pointer-events: none;
+            z-index: -1;
+        }
+        body::after {
+            content: "";
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 96px;
+            height: 96px;
+            background: url('data:image/svg+xml;utf8,<svg width="96" height="96" viewBox="0 0 96 96" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="0" y="0" width="24" height="24" fill="%23222"/><rect x="24" y="24" width="24" height="24" fill="%23555"/><rect x="48" y="48" width="24" height="24" fill="%23888"/><rect x="72" y="72" width="24" height="24" fill="%23bbb"/></svg>') no-repeat center;
+            image-rendering: pixelated;
+            opacity: 0.15;
+            pointer-events: none;
+            z-index: -1;
+        }
+
+        /* 用户信息栏浮层 - 左右布局 */
+        #user-info-bar {
+            position: fixed;
+            top: 10px;
+            left: 20px;
+            right: 20px;
+            z-index: 9999;
+            background-color: #e8e8e8;
+            border: 4px solid #2c2c2c;
+            box-shadow: 4px 4px 0 #333;
+            padding: 12px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 14px;
+            font-weight: bold;
+            color: #2c2c2c;
+            user-select: none;
+            border-radius: 0;
+            white-space: nowrap;
             box-sizing: border-box;
         }
 
-        button {
-            padding: 10px 20px;
-            background-color: #007bff;
-            color: white;
-            border: none;
+        #user-info-left {
+            display: flex;
+            gap: 16px;
+            align-items: center;
+        }
+
+        #user-info-left span {
+            line-height: 1.8;
+        }
+
+        #logoutBtn {
+            color: #dc3545;
+            text-decoration: none;
+            border: 2px solid #dc3545;
+            padding: 4px 12px;
+            background-color: #fff;
             cursor: pointer;
-            border-radius: 8px;
-            font-size: 16px;
-            transition: background-color 0.2s;
+            transition: all 0.2s;
+            font-family: 'zpix', monospace;
+            border-radius: 0;
+            user-select: none;
         }
 
-        button:hover:not(:disabled) {
-            background-color: #0056b3;
+        #logoutBtn:hover {
+            background-color: #dc3545;
+            color: #fff;
         }
 
-        button:disabled {
-            background-color: #cccccc;
-            cursor: not-allowed;
+        /* 主容器 - 墨水屏风格 */
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background-color: #fafafa;
+            border: 4px solid #333;
+            box-shadow: 8px 8px 0px #333;
+            padding: 24px;
+            position: relative;
+            z-index: 5;
         }
 
+        .container::before {
+            content: '';
+            position: absolute;
+            top: 8px;
+            left: 8px;
+            right: 8px;
+            bottom: 8px;
+            border: 2px dashed #666;
+            pointer-events: none;
+            z-index: -1;
+        }
+
+        /* 标题样式 */
+        h1 {
+            text-align: center;
+            color: #2c2c2c;
+            margin-bottom: 24px;
+            font-size: 24px;
+            text-shadow: 2px 2px 0px #e0e0e0;
+        }
+
+        /* 文本区域 - 像素风格 */
+        textarea {
+            width: 100%;
+            height: 200px;
+            margin: 16px 0;
+            padding: 16px;
+            background-color: #f5f5f5;
+            border: 3px solid #333;
+            box-shadow: inset 4px 4px 0px #e0e0e0;
+            font-size: 14px;
+            resize: vertical;
+            box-sizing: border-box;
+            color: #2c2c2c;
+            font-family: 'zpix', monospace;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: #007bff;
+            box-shadow: inset 4px 4px 0px #cce7ff;
+        }
+
+        /* 区块容器 - NES风格结合墨水屏配色 */
         .section-box {
-            margin: 20px 0;
-            padding: 20px;
-            border: 1px solid #e9ecef;
-            border-radius: 8px;
-            background-color: #f8f9fa;
+            margin: 24px 0;
+            background-color: #f8f8f8;
+            border: 3px solid #333;
+            position: relative;
+            font-family: 'zpix', monospace;
         }
 
         .section-box h3 {
-            margin-top: 0;
-            color: #495057;
-            border-bottom: 2px solid #eee;
-            padding-bottom: 10px;
+            margin: 0;
+            padding: 12px 16px;
+            background-color: #e8e8e8;
+            color: #2c2c2c;
+            border-bottom: 3px solid #333;
+            font-size: 16px;
+            font-weight: bold;
         }
 
+        .section-content {
+            padding: 16px;
+        }
+
+        /* 消息框 - 明快配色 */
         .message-box {
-            padding: 15px;
-            border: 1px solid;
-            margin: 10px 0;
-            border-radius: 8px;
+            padding: 12px 16px;
+            border: 3px solid;
+            margin: 12px 0;
+            font-size: 14px;
             text-align: center;
+            position: relative;
+            font-family: 'zpix', monospace;
         }
 
         .error {
-            color: #721c24;
-            background-color: #f8d7da;
-            border-color: #f5c6cb;
+            color: #fff;
+            background-color: #dc3545;
+            border-color: #a71e2a;
         }
 
         .info {
-            color: #0c5460;
-            background-color: #d1ecf1;
-            border-color: #bee5eb;
+            color: #fff;
+            background-color: #17a2b8;
+            border-color: #117a8b;
         }
 
         .success {
-            color: #155724;
-            background-color: #d4edda;
-            border-color: #c3e6cb;
+            color: #fff;
+            background-color: #28a745;
+            border-color: #1e7e34;
         }
 
         .warning {
-            color: #856404;
-            background-color: #fff3cd;
-            border-color: #ffeeba;
+            color: #2c2c2c;
+            background-color: #ffc107;
+            border-color: #d39e00;
         }
 
-        .model-controls {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            flex-wrap: wrap;
-        }
-
-        .model-status {
-            margin-top: 10px;
+        /* 表单控件 - 像素风格 */
+        select, input[type="number"] {
             padding: 8px 12px;
-            border-radius: 4px;
+            border: 3px solid #333;
+            background-color: #fff;
+            color: #2c2c2c;
             font-size: 14px;
+            box-shadow: 2px 2px 0px #ccc;
+            font-family: 'zpix', monospace;
+        }
+
+        select:focus, input[type="number"]:focus {
+            outline: none;
+            border-color: #007bff;
+            box-shadow: 2px 2px 0px #007bff;
+        }
+
+        /* 按钮样式 - 使用NES.css类并自定义颜色 */
+        button {
+            font-family: 'zpix', monospace;
+            font-size: 14px;
+            padding: 12px 16px;
+            border: none;
+            cursor: pointer;
+            position: relative;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            user-select: none;
+        }
+
+        .nes-btn {
+            background-color: #007bff;
+            color: #fff;
+            border: 3px solid #333 !important;
+            box-shadow: 4px 4px 0 #333;
+            border-radius: 0;
+            transition: background-color 0.2s;
+        }
+
+        .nes-btn:hover:not(:disabled) {
+            background-color: #0056b3;
+        }
+
+        .nes-btn:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+            box-shadow: none;
         }
 
         .confirm-btn {
-            background-color: #28a745;
+            background-color: #28a745 !important;
+            color: #fff;
         }
 
         .confirm-btn:hover:not(:disabled) {
-            background-color: #218838;
+            background-color: #218838 !important;
         }
 
-        .loading-spinner {
-            display: inline-block;
-            width: 16px;
-            height: 16px;
-            border: 2px solid #f3f3f3;
-            border-top: 2px solid #3498db;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin-right: 8px;
-            vertical-align: middle;
+        .img2img-btn {
+            background-color: #17a2b8 !important;
+            color: #fff;
         }
 
-        @keyframes spin {
-            0% {
-                transform: rotate(0deg);
-            }
-            100% {
-                transform: rotate(360deg);
-            }
+        .img2img-btn:hover {
+            background-color: #138496 !important;
         }
 
+        /* 模型控制区域 */
+        .model-controls {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            padding: 16px;
+            font-family: 'zpix', monospace;
+        }
+
+        .model-controls label {
+            color: #2c2c2c;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        .model-controls select {
+            min-width: 200px;
+        }
+
+        /* 当前模型信息 */
+        #currentModelInfo {
+            display: none;
+            padding: 16px;
+        }
+
+        #currentModelInfo > div {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: #e8e8e8;
+            padding: 12px;
+            border: 2px solid #333;
+            font-family: 'zpix', monospace;
+        }
+
+        #currentModelText {
+            color: #2c2c2c;
+            font-weight: bold;
+        }
+
+        /* 参数网格 */
         .param-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-            gap: 15px;
+            gap: 16px;
+            padding: 16px;
+            font-family: 'zpix', monospace;
         }
 
         .param-item {
@@ -154,465 +437,714 @@
         }
 
         .param-item label {
-            margin-bottom: 5px;
+            margin-bottom: 8px;
             font-size: 14px;
-            color: #333;
+            color: #2c2c2c;
+            font-weight: bold;
         }
 
-        .param-item input {
-            padding: 8px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
+        /* 风格管理区域 */
+        .style-controls {
+            padding: 16px;
+            font-family: 'zpix', monospace;
         }
 
-        #currentModelInfo {
-            display: none;
+        .style-controls > * {
+            margin-bottom: 12px;
+            display: block;
         }
 
-        #modelSelectionArea {
-            display: none;
-            margin-top: 10px;
+        .style-controls label {
+            color: #2c2c2c;
+            font-weight: bold;
+            margin-bottom: 4px;
+        }
+
+        .style-controls select,
+        .style-controls input {
+            width: 100%;
+            max-width: 300px;
+        }
+
+        .style-buttons {
+            display: flex;
+            gap: 12px;
+            margin-top: 12px;
+        }
+
+        /* 按钮组 */
+        .button-group {
+            display: flex;
+            gap: 16px;
+            margin-top: 24px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        /* 加载动画 - 像素风格 */
+        .loading-spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #007bff;
+            animation: spin 1s steps(8, end) infinite;
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* 状态消息 */
+        #loraStatusMessage {
+            margin-top: 12px;
+            padding: 8px 12px;
+            background-color: #e8e8e8;
+            border: 2px solid #333;
+            color: #2c2c2c;
+            font-size: 12px;
+            font-family: 'zpix', monospace;
+        }
+
+        /* 模型选择区域 */
+        #modelSelectionArea,
+        #initialModelSelection {
+            background-color: #f0f0f0;
+            border-top: 2px dashed #666;
+            margin-top: 12px;
+            font-family: 'zpix', monospace;
         }
 
         #initialModelSelection {
             display: flex;
         }
 
-        .button-group {
-            display: flex;
-            gap: 15px;
-            margin-top: 20px;
-            flex-wrap: wrap;
+        /* 项目标识图片 */
+        .project-logo {
+            max-width: 200px;
+            display: block;
+            margin: 0 auto 24px auto;
+            border: 4px solid #333;
+            box-shadow: 4px 4px 0px #ccc;
+            image-rendering: pixelated;
         }
 
-        .img2img-btn {
-            background-color: #17a2b8;
+        /* 响应式设计 */
+        @media (max-width: 768px) {
+            body {
+                margin: 10px;
+                padding-top: 70px;
+            }
+            
+            .container {
+                padding: 16px;
+            }
+            
+            .param-grid {
+                grid-template-columns: 1fr;
+                gap: 12px;
+            }
+            
+            .button-group {
+                flex-direction: column;
+                align-items: center;
+            }
+            
+            .model-controls {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .style-buttons {
+                flex-direction: column;
+            }
+            
+            /* 浮层宽度自适应 */
+            #user-info-bar {
+                left: 10px;
+                right: 10px;
+                padding: 12px 16px;
+                font-size: 12px;
+                gap: 12px;
+            }
         }
 
-        .img2img-btn:hover {
-            background-color: #138496;
+        /* 隐藏元素 */
+        .hidden {
+            display: none !important;
         }
     </style>
 </head>
 <body>
-<!-- 添加用户信息栏 -->
-<div id="user-info-bar">
-    <span id="userInfoText">加载中...</span>
-    <a href="#" id="logoutBtn">登出</a>
-</div>
+    <!-- 背景动画层 -->
+    <div class="background-animation" id="backgroundAnimation"></div>
 
-<div class="container">
-    <img src="/static/ThePromisedLand.png" alt="项目标识"
-         style="max-width: 200px; display: block; margin: 0 auto 20px auto; border-radius: 8px;">
-    <h1>小说转漫画服务</h1>
-    <div>
-        <textarea id="novelText" placeholder="在此输入一段奇妙的冒险故事..."></textarea>
+    <!-- 用户信息栏浮层 -->
+    <div id="user-info-bar">
+        <div id="user-info-left">
+            <span id="userInfoText">加载中...</span>
+        </div>
+        <a href="#" id="logoutBtn">登出</a>
+    </div>
 
-        <div class="section-box">
-            <h3>模型管理</h3>
-            <div id="currentModelInfo">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <span id="currentModelText"></span>
-                    <button id="changeModelBtn" onclick="showModelSelection()" class="warning">切换模型</button>
+    <div class="container nes-container with-title">
+        <p class="title">像素漫画工坊</p>
+        <img src="/static/ThePromisedLand.png" alt="项目标识" class="project-logo">
+        
+        <h1>小说转漫画服务</h1>
+        
+        <div>
+            <textarea id="novelText" class="nes-textarea" placeholder="在此输入一段奇妙的冒险故事..."></textarea>
+
+            <!-- 模型管理 -->
+            <div class="section-box nes-container with-title">
+                <p class="title">模型管理</p>
+                <div class="section-content">
+                    <div id="currentModelInfo">
+                        <div class="nes-container">
+                            <span id="currentModelText"></span>
+                            <button id="changeModelBtn" onclick="showModelSelection()" class="nes-btn is-warning">切换模型</button>
+                        </div>
+                    </div>
+                    
+                    <div id="modelSelectionArea" class="hidden">
+                        <div class="model-controls">
+                            <label for="modelSelect">选择新模型:</label>
+                            <select id="modelSelect" class="nes-select"></select>
+                            <button id="confirmModelBtn" class="nes-btn is-success confirm-btn" onclick="confirmModel()" disabled>确认加载</button>
+                            <button onclick="hideModelSelection()" class="nes-btn">取消</button>
+                        </div>
+                    </div>
+                    
+                    <div id="initialModelSelection" class="model-controls">
+                        <label for="initialModelSelect">选择模型:</label>
+                        <select id="initialModelSelect" class="nes-select"></select>
+                        <button id="initialConfirmBtn" class="nes-btn is-success confirm-btn" onclick="confirmInitialModel()" disabled>确认加载</button>
+                    </div>
+                    
+                    <div id="modelStatus" class="message-box hidden"></div>
                 </div>
             </div>
-            <div id="modelSelectionArea">
-                <div class="model-controls">
-                    <label for="modelSelect">选择新模型:</label>
-                    <select id="modelSelect"></select>
-                    <button id="confirmModelBtn" class="confirm-btn" onclick="confirmModel()" disabled>确认加载</button>
-                    <button onclick="hideModelSelection()" style="background-color: #6c757d;">取消</button>
+
+            <!-- 风格管理 -->
+            <div class="section-box nes-container with-title">
+                <p class="title">风格管理</p>
+                <div class="section-content style-controls">
+                    <label for="loraSelect">选择风格:</label>
+                    <select id="loraSelect" class="nes-select">
+                        <option value="">加载失败或无风格</option>
+                    </select>
+                    
+                    <label for="loraScaleInput">权重 scale (0.0 - 2.0):</label>
+                    <input type="number" id="loraScaleInput" class="nes-input" min="0" max="2" step="0.1" value="1.0">
+                    
+                    <div class="style-buttons">
+                        <button id="loadLoraBtn" class="nes-btn is-primary">加载风格</button>
+                        <button id="unloadLoraBtn" class="nes-btn">卸载风格</button>
+                    </div>
+                    
+                    <div id="loraStatusMessage" class="nes-container">状态信息将在此显示</div>
                 </div>
             </div>
-            <div id="initialModelSelection" class="model-controls">
-                <label for="initialModelSelect">选择模型:</label>
-                <select id="initialModelSelect"></select>
-                <button id="initialConfirmBtn" class="confirm-btn" onclick="confirmInitialModel()" disabled>确认加载
+
+            <!-- 生成参数 -->
+            <div class="section-box nes-container with-title">
+                <p class="title">生成参数</p>
+                <div class="section-content">
+                    <div class="param-grid">
+                        <div class="param-item">
+                            <label for="numScenes">场景数量</label>
+                            <input type="number" id="numScenes" class="nes-input" value="10" min="1" max="20">
+                        </div>
+                        <div class="param-item">
+                            <label for="steps">迭代步数</label>
+                            <input type="number" id="steps" class="nes-input" value="30" min="10" max="100">
+                        </div>
+                        <div class="param-item">
+                            <label for="guidance">引导系数</label>
+                            <input type="number" id="guidance" class="nes-input" value="7.5" min="1" max="20" step="0.5">
+                        </div>
+                        <div class="param-item">
+                            <label for="width">图片宽度</label>
+                            <input type="number" id="width" class="nes-input" value="512" min="256" max="1024" step="64">
+                        </div>
+                        <div class="param-item">
+                            <label for="height">图片高度</label>
+                            <input type="number" id="height" class="nes-input" value="512" min="256" max="1024" step="64">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 操作按钮 -->
+            <div class="button-group">
+                <button id="generateBtn" class="nes-btn is-primary" onclick="handleGenerateClick()">
+                    <i class="nes-icon trophy"></i>生成漫画
+                </button>
+                <button id="img2imgBtn" class="nes-btn is-success img2img-btn" onclick="goToImg2Img()">
+                    <i class="nes-icon star"></i>去图生图
                 </button>
             </div>
-            <div id="modelStatus" class="message-box" style="display: none;"></div>
-        </div>
-
-        <!-- LoRA风格管理模块 -->
-        <div class="section-box">
-            <h3>风格管理</h3>
-            <label for="loraSelect">选择风格:</label>
-            <select id="loraSelect" style="width: 100%; padding: 8px; margin-bottom: 8px;">
-                <option value="">加载失败或无风格</option>
-            </select>
-            <label for="loraScaleInput">权重 scale (0.0 - 2.0):</label>
-            <input type="number" id="loraScaleInput" min="0" max="2" step="0.1" value="1.0" style="width: 100px; margin-bottom: 8px;">
-            <div>
-                <button id="loadLoraBtn" style="margin-right: 10px;">加载风格</button>
-                <button id="unloadLoraBtn">卸载风格</button>
-            </div>
-            <div id="loraStatusMessage" style="margin-top: 8px; color: #555;"></div>
-        </div>
-
-        <div class="section-box">
-            <h3>生成参数</h3>
-            <div class="param-grid">
-                <div class="param-item"><label for="numScenes">场景数量</label><input type="number" id="numScenes"
-                                                                                      value="10" min="1" max="20"></div>
-                <div class="param-item"><label for="steps">迭代步数</label><input type="number" id="steps" value="30"
-                                                                                  min="10" max="100"></div>
-                <div class="param-item"><label for="guidance">引导系数</label><input type="number" id="guidance"
-                                                                                     value="7.5" min="1" max="20"
-                                                                                     step="0.5"></div>
-                <div class="param-item"><label for="width">图片宽度</label><input type="number" id="width" value="512"
-                                                                                  min="256" max="1024" step="64"></div>
-                <div class="param-item"><label for="height">图片高度</label><input type="number" id="height" value="512"
-                                                                                   min="256" max="1024" step="64"></div>
-            </div>
-        </div>
-
-        <div class="button-group">
-            <button id="generateBtn" onclick="handleGenerateClick()">生成漫画</button>
-            <button id="img2imgBtn" class="img2img-btn" onclick="goToImg2Img()">去图生图</button>
         </div>
     </div>
-</div>
 
-<script>
-    // --- 全局状态 ---
-    const token = localStorage.getItem('accessToken');
-    let currentUser = null;
-    let isModelLoaded = false;
-    let isLoadingModel = false;
-    let selectedModel = null;
+    <script>
+        // --- 全局状态 ---
+        const token = localStorage.getItem('accessToken');
+        let currentUser = null;
+        let isModelLoaded = false;
+        let isLoadingModel = false;
+        let selectedModel = null;
 
-    // --- 应用初始化 ---
-    window.addEventListener('load', initApp);
-  
-    async function initApp() {
-        if (!token) {
-            window.location.href = '/login?session=expired';
-            return;
+        // --- 背景动画系统 ---
+        class BackgroundAnimationSystem {
+            constructor() {
+                this.container = document.getElementById('backgroundAnimation');
+                this.animals = [];
+                this.animalTypes = ['cat', 'rabbit', 'bird', 'fish'];
+                this.animationId = null;
+                this.init();
+            }
+
+            init() {
+                this.createAnimals();
+                this.startAnimation();
+            }
+
+            createAnimals() {
+                // 创建8-12个随机小动物
+                const animalCount = Math.floor(Math.random() * 5) + 8;
+                
+                for (let i = 0; i < animalCount; i++) {
+                    const animal = this.createAnimal();
+                    this.animals.push(animal);
+                    this.container.appendChild(animal.element);
+                }
+            }
+
+            createAnimal() {
+                const animalType = this.animalTypes[Math.floor(Math.random() * this.animalTypes.length)];
+                const element = document.createElement('div');
+                
+                element.className = `pixel-animal pixel-${animalType}`;
+                
+                // 随机位置
+                const startX = Math.random() * window.innerWidth;
+                const startY = Math.random() * window.innerHeight;
+                
+                element.style.left = startX + 'px';
+                element.style.top = startY + 'px';
+                
+                // 随机动画延迟
+                element.style.animationDelay = Math.random() * 5 + 's';
+                
+                // 随机大小变化
+                const scale = 0.6 + Math.random() * 0.8;
+                element.style.transform = `scale(${scale})`;
+                
+                return {
+                    element: element,
+                    type: animalType,
+                    x: startX,
+                    y: startY,
+                    vx: (Math.random() - 0.5) * 2,
+                    vy: (Math.random() - 0.5) * 2,
+                    speed: 0.5 + Math.random() * 1.5
+                };
+            }
+
+            updateAnimal(animal) {
+                // 更新位置
+                animal.x += animal.vx * animal.speed;
+                animal.y += animal.vy * animal.speed;
+                
+                // 边界检测和反弹
+                if (animal.x <= 0 || animal.x >= window.innerWidth - 32) {
+                    animal.vx = -animal.vx;
+                    animal.x = Math.max(0, Math.min(window.innerWidth - 32, animal.x));
+                }
+                
+                if (animal.y <= 0 || animal.y >= window.innerHeight - 32) {
+                    animal.vy = -animal.vy;
+                    animal.y = Math.max(0, Math.min(window.innerHeight - 32, animal.y));
+                }
+                
+                // 应用位置
+                animal.element.style.left = animal.x + 'px';
+                animal.element.style.top = animal.y + 'px';
+                
+                // 根据移动方向调整朝向
+                if (animal.vx > 0) {
+                    animal.element.style.transform = animal.element.style.transform.replace('scaleX(-1)', 'scaleX(1)');
+                } else if (animal.vx < 0) {
+                    animal.element.style.transform = animal.element.style.transform.replace('scaleX(1)', 'scaleX(-1)');
+                }
+            }
+
+            animate() {
+                this.animals.forEach(animal => {
+                    this.updateAnimal(animal);
+                });
+                
+                this.animationId = requestAnimationFrame(() => this.animate());
+            }
+
+            startAnimation() {
+                if (!this.animationId) {
+                    this.animate();
+                }
+            }
+
+            stopAnimation() {
+                if (this.animationId) {
+                    cancelAnimationFrame(this.animationId);
+                    this.animationId = null;
+                }
+            }
+
+            // 窗口大小改变时重新调整
+            onResize() {
+                this.animals.forEach(animal => {
+                    animal.x = Math.min(animal.x, window.innerWidth - 32);
+                    animal.y = Math.min(animal.y, window.innerHeight - 32);
+                });
+            }
         }
-        await getUserInfo();
-        if (currentUser) {
-            await loadAvailableModels();
-            await checkModelStatus();
-            await loadLorasToSelect();
-            await updateLoraStatus();
-        }
-    }
 
-    // --- 用户管理 ---
-    async function getUserInfo() {
-        try {
-            const response = await fetch('/users/me', {
-                headers: {'Authorization': `Bearer ${token}`}
+        // 初始化背景动画系统
+        let backgroundAnimationSystem;
+        
+        // --- 应用初始化 ---
+        window.addEventListener('load', async () => {
+            // 初始化背景动画
+            backgroundAnimationSystem = new BackgroundAnimationSystem();
+            
+            // 窗口大小改变时调整动画
+            window.addEventListener('resize', () => {
+                backgroundAnimationSystem.onResize();
             });
-            if (!response.ok) {
-                localStorage.removeItem('accessToken');
+            
+            // 初始化应用
+            await initApp();
+        });
+
+        async function initApp() {
+            if (!token) {
                 window.location.href = '/login?session=expired';
                 return;
             }
-            currentUser = await response.json();
-            document.getElementById('userInfoText').textContent =
-                    `用户: ${currentUser.username} | 剩余积分: ${currentUser.credits}`;
-        } catch (error) {
-            console.error('获取用户信息失败:', error);
-            document.getElementById('userInfoText').innerHTML = `获取用户信息失败. <a href="/login">重新登录</a>`;
-        }
-    }
-
-    document.getElementById('logoutBtn').addEventListener('click', (e) => {
-        e.preventDefault();
-        localStorage.removeItem('accessToken');
-        window.location.href = '/login';
-    });
-
-    async function loadAvailableModels() {
-        try {
-            const response = await fetch('/available-models');
-            const data = await response.json();
-            ['modelSelect', 'initialModelSelect'].forEach(id => {
-                const select = document.getElementById(id);
-                select.innerHTML = '';
-                if (data.models && data.models.length > 0) {
-                    select.appendChild(new Option('请选择一个模型', ''));
-                    data.models.forEach(model => select.appendChild(new Option(model, model)));
-                } else {
-                    select.appendChild(new Option('无可用模型', ''));
-                }
-            });
-        } catch (error) {
-            console.error('获取模型列表失败:', error);
-            ['modelSelect', 'initialModelSelect'].forEach(id => {
-                document.getElementById(id).innerHTML = '<option value="">获取失败</option>';
-            });
-        }
-    }
-
-    async function loadLorasToSelect() {
-        try {
-            const resp = await fetch('/available-loras');
-            const data = await resp.json();
-            const select = document.getElementById('loraSelect');
-            select.innerHTML = '';
-            if (data.loras && data.loras.length > 0) {
-                select.appendChild(new Option('请选择风格', ''));
-                data.loras.forEach(lora => {
-                    const option = new Option(`${lora.name} - ${lora.description}`, lora.name);
-                    select.appendChild(option);
-                });
-            } else {
-                select.appendChild(new Option('无可用风格', ''));
+            await getUserInfo();
+            if (currentUser) {
+                await loadAvailableModels();
+                await checkModelStatus();
+                await loadLorasToSelect();
+                await updateLoraStatus();
             }
-        } catch (e) {
-            console.error('获取风格列表失败', e);
-            const select = document.getElementById('loraSelect');
-            select.innerHTML = '<option value="">获取失败</option>';
         }
-    }
 
-    document.getElementById('loadLoraBtn').addEventListener('click', async () => {
-        const loraName = document.getElementById('loraSelect').value;
-        if (!loraName) {
-            alert('请选择一个风格');
-            return;
+        // --- 用户管理 ---
+        async function getUserInfo() {
+            try {
+                const response = await fetch('/users/me', {
+                    headers: {'Authorization': `Bearer ${token}`}
+                });
+                if (!response.ok) {
+                    localStorage.removeItem('accessToken');
+                    window.location.href = '/login?session=expired';
+                    return;
+                }
+                currentUser = await response.json();
+                document.getElementById('userInfoText').textContent =
+                        `用户: ${currentUser.username} | 剩余积分: ${currentUser.credits}`;
+            } catch (error) {
+                console.error('获取用户信息失败:', error);
+                document.getElementById('userInfoText').innerHTML = `获取用户信息失败. <a href="/login">重新登录</a>`;
+            }
         }
-        const res = await fetch('/load-lora', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({lora_name: loraName})
+
+        document.getElementById('logoutBtn').addEventListener('click', (e) => {
+            e.preventDefault();
+            localStorage.removeItem('accessToken');
+            window.location.href = '/login';
         });
-        const data = await res.json();
-        document.getElementById('loraStatusMessage').textContent = data.message || '操作完成';
-        if (data.success) {
-            // 加载成功后默认scale显示1.0
-            document.getElementById('loraScaleInput').value = "1.0";
-        }
-    });
 
-    document.getElementById('loraScaleInput').addEventListener('change', async () => {
-        const scale = parseFloat(document.getElementById('loraScaleInput').value);
-        if (isNaN(scale) || scale < 0 || scale > 2) {
-            alert('权重scale需在0到2之间');
-            return;
+        async function loadAvailableModels() {
+            try {
+                const response = await fetch('/available-models');
+                const data = await response.json();
+                ['modelSelect', 'initialModelSelect'].forEach(id => {
+                    const select = document.getElementById(id);
+                    select.innerHTML = '';
+                    if (data.models && data.models.length > 0) {
+                        select.appendChild(new Option('请选择一个模型', ''));
+                        data.models.forEach(model => select.appendChild(new Option(model, model)));
+                    } else {
+                        select.appendChild(new Option('无可用模型', ''));
+                    }
+                });
+            } catch (error) {
+                console.error('获取模型列表失败:', error);
+                ['modelSelect', 'initialModelSelect'].forEach(id => {
+                    document.getElementById(id).innerHTML = '<option value="">获取失败</option>';
+                });
+            }
         }
-        const res = await fetch('/set-lora-scale', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({scale: scale})
-        });
-        const data = await res.json();
-        document.getElementById('loraStatusMessage').textContent = data.message || 'scale调整完成';
-    });
 
-    document.getElementById('unloadLoraBtn').addEventListener('click', async () => {
-        const res = await fetch('/unload-lora', {method: 'POST'});
-        const data = await res.json();
-        document.getElementById('loraStatusMessage').textContent = data.message || '操作完成';
-        if (data.success) {
-            document.getElementById('loraScaleInput').value = "1.0";
+        async function loadLorasToSelect() {
+            try {
+                const resp = await fetch('/available-loras');
+                const data = await resp.json();
+                const select = document.getElementById('loraSelect');
+                select.innerHTML = '';
+                if (data.loras && data.loras.length > 0) {
+                    select.appendChild(new Option('请选择风格', ''));
+                    data.loras.forEach(lora => {
+                        const option = new Option(`${lora.name} - ${lora.description}`, lora.name);
+                        select.appendChild(option);
+                    });
+                } else {
+                    select.appendChild(new Option('无可用风格', ''));
+                }
+            } catch (e) {
+                console.error('获取风格列表失败', e);
+                const select = document.getElementById('loraSelect');
+                select.innerHTML = '<option value="">获取失败</option>';
+            }
         }
-    });
 
-    async function updateLoraStatus() {
-        try {
-            const res = await fetch('/lora-status');
+        document.getElementById('loadLoraBtn').addEventListener('click', async () => {
+            const loraName = document.getElementById('loraSelect').value;
+            if (!loraName) {
+                alert('请选择一个风格');
+                return;
+            }
+            const res = await fetch('/load-lora', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({lora_name: loraName})
+            });
             const data = await res.json();
-            const statusMsg = data.loaded 
-                ? `当前加载风格: ${data.name || '未知'}，权重scale: ${data.scale.toFixed(2)}`
-                : "未加载任何风格";
-            document.getElementById('loraStatusMessage').textContent = statusMsg;
-            if (data.loaded) {
-                document.getElementById('loraScaleInput').value = data.scale.toFixed(2);
-            } else {
+            document.getElementById('loraStatusMessage').textContent = data.message || '操作完成';
+            if (data.success) {
                 document.getElementById('loraScaleInput').value = "1.0";
             }
-        } catch (e) {
-            console.error('获取LoRA状态失败', e);
-        }
-    }
+        });
 
-    async function checkModelStatus() {
-        try {
-            const response = await fetch('/model-status');
-            const data = await response.json();
-            isModelLoaded = data.is_loaded;
-            if (data.is_loaded && data.current_model) {
-                selectedModel = data.current_model;
-                showCurrentModelInfo(data.current_model);
-            } else {
+        document.getElementById('loraScaleInput').addEventListener('change', async () => {
+            const scale = parseFloat(document.getElementById('loraScaleInput').value);
+            if (isNaN(scale) || scale < 0 || scale > 2) {
+                alert('权重scale需在0到2之间');
+                return;
+            }
+            const res = await fetch('/set-lora-scale', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({scale: scale})
+            });
+            const data = await res.json();
+            document.getElementById('loraStatusMessage').textContent = data.message || 'scale调整完成';
+        });
+
+        document.getElementById('unloadLoraBtn').addEventListener('click', async () => {
+            const res = await fetch('/unload-lora', {method: 'POST'});
+            const data = await res.json();
+            document.getElementById('loraStatusMessage').textContent = data.message || '操作完成';
+            if (data.success) {
+                document.getElementById('loraScaleInput').value = "1.0";
+            }
+        });
+
+        async function updateLoraStatus() {
+            try {
+                const res = await fetch('/lora-status');
+                const data = await res.json();
+                const statusMsg = data.loaded 
+                    ? `当前加载风格: ${data.name || '未知'}，权重scale: ${data.scale.toFixed(2)}`
+                    : "未加载任何风格";
+                document.getElementById('loraStatusMessage').textContent = statusMsg;
+                if (data.loaded) {
+                    document.getElementById('loraScaleInput').value = data.scale.toFixed(2);
+                } else {
+                    document.getElementById('loraScaleInput').value = "1.0";
+                }
+            } catch (e) {
+                console.error('获取LoRA状态失败', e);
+            }
+        }
+
+        async function checkModelStatus() {
+            try {
+                const response = await fetch('/model-status');
+                const data = await response.json();
+                isModelLoaded = data.is_loaded;
+                if (data.is_loaded && data.current_model) {
+                    selectedModel = data.current_model;
+                    showCurrentModelInfo(data.current_model);
+                } else {
+                    showInitialModelSelection();
+                }
+            } catch (error) {
+                console.error('获取模型状态失败:', error);
                 showInitialModelSelection();
             }
-        } catch (error) {
-            console.error('获取模型状态失败:', error);
-            showInitialModelSelection();
         }
-    }
 
-    function showCurrentModelInfo(modelName) {
-        document.getElementById('currentModelText').textContent = `当前模型: ${modelName}`;
-        document.getElementById('currentModelInfo').style.display = 'block';
-        document.getElementById('initialModelSelection').style.display = 'none';
-        document.getElementById('modelSelectionArea').style.display = 'none';
-    }
-
-    function showInitialModelSelection() {
-        document.getElementById('currentModelInfo').style.display = 'none';
-        document.getElementById('initialModelSelection').style.display = 'flex';
-    }
-
-    function showModelSelection() {
-        document.getElementById('modelSelectionArea').style.display = 'block';
-        document.getElementById('modelSelect').value = '';
-        document.getElementById('confirmModelBtn').disabled = true;
-    }
-
-    function hideModelSelection() {
-        document.getElementById('modelSelectionArea').style.display = 'none';
-    }
-
-    document.getElementById('initialModelSelect').addEventListener('change', function () {
-        setModel(this.value, 'initialConfirmBtn');
-    });
-    document.getElementById('modelSelect').addEventListener('change', function () {
-        setModel(this.value, 'confirmModelBtn');
-    });
-
-    async function setModel(modelName, btnId) {
-        const confirmBtn = document.getElementById(btnId);
-        if (!modelName) {
-            confirmBtn.disabled = true;
-            return;
+        function showCurrentModelInfo(modelName) {
+            document.getElementById('currentModelText').textContent = `当前模型: ${modelName}`;
+            document.getElementById('currentModelInfo').style.display = 'block';
+            document.getElementById('initialModelSelection').style.display = 'none';
+            document.getElementById('modelSelectionArea').classList.add('hidden');
         }
-        try {
-            const response = await fetch('/set-model', {
-                method: 'POST', headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({model_name: modelName})
-            });
-            const result = await response.json();
-            if (result.success) {
-                selectedModel = modelName;
-                confirmBtn.disabled = false;
-                const message = isModelLoaded ? `切换模型到: ${modelName} (需要重新加载)` : `已选择: ${modelName}`;
-                showModelStatus(message, isModelLoaded ? 'warning' : 'info');
-            } else {
-                showModelStatus(`模型设置失败: ${result.message}`, 'error');
+
+        function showInitialModelSelection() {
+            document.getElementById('currentModelInfo').style.display = 'none';
+            document.getElementById('initialModelSelection').style.display = 'flex';
+        }
+
+        function showModelSelection() {
+            document.getElementById('modelSelectionArea').classList.remove('hidden');
+            document.getElementById('modelSelect').value = '';
+            document.getElementById('confirmModelBtn').disabled = true;
+        }
+
+        function hideModelSelection() {
+            document.getElementById('modelSelectionArea').classList.add('hidden');
+        }
+
+        document.getElementById('initialModelSelect').addEventListener('change', function () {
+            setModel(this.value, 'initialConfirmBtn');
+        });
+        document.getElementById('modelSelect').addEventListener('change', function () {
+            setModel(this.value, 'confirmModelBtn');
+        });
+
+        async function setModel(modelName, btnId) {
+            const confirmBtn = document.getElementById(btnId);
+            if (!modelName) {
+                confirmBtn.disabled = true;
+                return;
             }
-        } catch (error) {
-            showModelStatus(`设置请求失败: ${error.message}`, 'error');
+            try {
+                const response = await fetch('/set-model', {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({model_name: modelName})
+                });
+                const result = await response.json();
+                if (result.success) {
+                    selectedModel = modelName;
+                    confirmBtn.disabled = false;
+                    const message = isModelLoaded ? `切换模型到: ${modelName} (需要重新加载)` : `已选择: ${modelName}`;
+                    showModelStatus(message, isModelLoaded ? 'warning' : 'info');
+                } else {
+                    showModelStatus(`模型设置失败: ${result.message}`, 'error');
+                }
+            } catch (error) {
+                showModelStatus(`设置请求失败: ${error.message}`, 'error');
+            }
         }
-    }
 
-    async function confirmInitialModel() {
-        await loadModel('initialConfirmBtn', 'initialModelSelect');
-    }
+        async function confirmInitialModel() {
+            await loadModel('initialConfirmBtn', 'initialModelSelect');
+        }
 
-    async function confirmModel() {
-        await loadModel('confirmModelBtn', 'modelSelect');
-    }
+        async function confirmModel() {
+            await loadModel('confirmModelBtn', 'modelSelect');
+        }
 
-    async function loadModel(btnId, selectId) {
-        if (!selectedModel || isLoadingModel) return;
-        const confirmBtn = document.getElementById(btnId);
-        const modelSelect = document.getElementById(selectId);
+        async function loadModel(btnId, selectId) {
+            if (!selectedModel || isLoadingModel) return;
+            const confirmBtn = document.getElementById(btnId);
+            const modelSelect = document.getElementById(selectId);
 
-        isLoadingModel = true;
-        confirmBtn.disabled = true;
-        if (modelSelect) modelSelect.disabled = true;
-        confirmBtn.innerHTML = '<span class="loading-spinner"></span>加载中...';
-        showModelStatus('模型正在加载到显存，请耐心等待...', 'info');
+            isLoadingModel = true;
+            confirmBtn.disabled = true;
+            if (modelSelect) modelSelect.disabled = true;
+            confirmBtn.innerHTML = '<span class="loading-spinner"></span>加载中...';
+            showModelStatus('模型正在加载到显存，请耐心等待...', 'info');
 
-        try {
-            const response = await fetch('/load-model', {method: 'POST'});
-            const result = await response.json();
-            if (result.success) {
-                isModelLoaded = true;
-                showModelStatus('模型加载成功！', 'success');
-                showCurrentModelInfo(selectedModel);
-                setTimeout(hideModelStatus, 3000);
-            } else {
+            try {
+                const response = await fetch('/load-model', {method: 'POST'});
+                const result = await response.json();
+                if (result.success) {
+                    isModelLoaded = true;
+                    showModelStatus('模型加载成功！', 'success');
+                    showCurrentModelInfo(selectedModel);
+                    setTimeout(hideModelStatus, 3000);
+                } else {
+                    isModelLoaded = false;
+                    showModelStatus(`模型加载失败: ${result.message}`, 'error');
+                    confirmBtn.innerHTML = '确认加载';
+                    confirmBtn.disabled = false;
+                    if (modelSelect) modelSelect.disabled = false;
+                }
+            } catch (error) {
                 isModelLoaded = false;
-                showModelStatus(`模型加载失败: ${result.message}`, 'error');
+                showModelStatus(`加载模型请求失败: ${error.message}`, 'error');
                 confirmBtn.innerHTML = '确认加载';
                 confirmBtn.disabled = false;
                 if (modelSelect) modelSelect.disabled = false;
             }
-        } catch (error) {
-            isModelLoaded = false;
-            showModelStatus(`加载模型请求失败: ${error.message}`, 'error');
-            confirmBtn.innerHTML = '确认加载';
-            confirmBtn.disabled = false;
-            if (modelSelect) modelSelect.disabled = false;
-        }
-        isLoadingModel = false;
-    }
-
-    function showModelStatus(message, type) {
-        const statusDiv = document.getElementById('modelStatus');
-        statusDiv.style.display = 'block';
-        statusDiv.textContent = message;
-        statusDiv.className = `message-box ${type}`;
-    }
-
-    function hideModelStatus() {
-        document.getElementById('modelStatus').style.display = 'none';
-    }
-
-    // --- 生成按钮的"守卫"函数 ---
-    function handleGenerateClick() {
-
-        // 1. 前置检查
-        if (!isModelLoaded) {
-            alert('请先选择并成功加载一个模型！');
-            return;
-        }
-        if (!document.getElementById('novelText').value.trim()) {
-            alert('请输入小说文本！');
-            return;
-        }
-        if (!currentUser) {
-            alert('无法获取用户信息，请刷新页面重试。');
-            return;
+            isLoadingModel = false;
         }
 
-        const numScenes = parseInt(document.getElementById('numScenes').value);
-        const requiredCredits = numScenes * 100;
-        const text = document.getElementById('novelText').value;
-        const steps = document.getElementById('steps').value;
-        const guidance = document.getElementById('guidance').value;
-        const width = document.getElementById('width').value;
-        const height = document.getElementById('height').value;
-
-        if (currentUser.credits < requiredCredits) {
-            alert(`积分不足！\n\n本次生成需要: ${requiredCredits} 积分\n您当前拥有: ${currentUser.credits} 积分\n\n请减少场景数量或等待明天积分重置。`);
-            return;
+        function showModelStatus(message, type) {
+            const statusDiv = document.getElementById('modelStatus');
+            statusDiv.classList.remove('hidden');
+            statusDiv.textContent = message;
+            statusDiv.className = `message-box ${type}`;
         }
 
-        const params = {
-            text: text,
-            num_scenes: numScenes,
-            steps: steps,
-            guidance: guidance,
-            width: width,
-            height: height
-        };
+        function hideModelStatus() {
+            document.getElementById('modelStatus').classList.add('hidden');
+        }
 
-        sessionStorage.setItem('comicParams', JSON.stringify(params));
-        window.location.href = '/pic';
+        function handleGenerateClick() {
+            if (!isModelLoaded) {
+                alert('请先选择并成功加载一个模型！');
+                return;
+            }
+            if (!document.getElementById('novelText').value.trim()) {
+                alert('请输入小说文本！');
+                return;
+            }
+            if (!currentUser) {
+                alert('无法获取用户信息，请刷新页面重试。');
+                return;
+            }
 
-        // 2. 所有检查通过，调用核心生成函数
-        generateComic();
-    }
+            const numScenes = parseInt(document.getElementById('numScenes').value);
+            const requiredCredits = numScenes * 100;
+            const text = document.getElementById('novelText').value;
+            const steps = document.getElementById('steps').value;
+            const guidance = document.getElementById('guidance').value;
+            const width = document.getElementById('width').value;
+            const height = document.getElementById('height').value;
 
+            if (currentUser.credits < requiredCredits) {
+                alert(`积分不足！\n\n本次生成需要: ${requiredCredits} 积分\n您当前拥有: ${currentUser.credits} 积分\n\n请减少场景数量或等待明天积分重置。`);
+                return;
+            }
 
+            const params = {
+                text: text,
+                num_scenes: numScenes,
+                steps: steps,
+                guidance: guidance,
+                width: width,
+                height: height
+            };
 
-    // --- 图生图功能 ---
-    function goToImg2Img() {
-        // 构建8081端口的img2img URL
-        const img2imgUrl = 'http://127.0.0.1:8081';
+            sessionStorage.setItem('comicParams', JSON.stringify(params));
+            window.location.href = '/pic';
+        }
 
-        // 在新标签页中打开
-        window.open(img2imgUrl, '_blank');
-    }
-
-
-</script>
+        function goToImg2Img() {
+            const img2imgUrl = 'http://127.0.0.1:8081';
+            window.open(img2imgUrl, '_blank');
+        }
+    </script>
 </body>
 </html>
