@@ -1,0 +1,30 @@
+Pixel_style: 
+  path: "/home/henry/workspace/model_checkpoint/pixel_style_sdxl/1552.safetensors"
+  single_files: true    ### if true, is a civitai model
+  use_safetensors: true
+  type: "sdxl"
+
+# 备选的标准SD模型（如果SDXL有问题）
+Pixel_style_sd: 
+  path: "runwayml/stable-diffusion-v1-5"
+  single_files: false
+  use_safetensors: true
+  type: "sd"
+
+Unstable:
+  path: "/home/henry/workspace/model_checkpoint/unstable_sdxl"
+  single_files: false
+  use_safetensors: false
+  type: "sdxl"
+
+Pixel_style1:
+  path: "D:/sdpy/model/AnythingXL_xl.safetensors"
+  single_files: true    ### if true, is a civitai model
+  use_safetensors: true
+  type: "sdxl"
+
+pixel_lora_rank_32:
+  path: "/home/henry/workspace/Flux_create_dataset/pixel_lora_output_rank_32/pytorch_lora_weights.safetensors"
+  use_safetensors: true
+  type: "lora"
+  prompt: "pixel styl, 8-bit"
