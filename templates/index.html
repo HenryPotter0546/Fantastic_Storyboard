@@ -672,53 +672,90 @@
     }
 
     // --- 生成按钮的"守卫"函数 ---
-    function handleGenerateClick() {
+async function handleGenerateClick() {
+    // 1. 前置检查
+    if (!isModelLoaded) {
+        alert('请先选择并成功加载一个模型！');
+        return;
+    }
+    if (!document.getElementById('novelText').value.trim()) {
+        alert('请输入小说文本！');
+        return;
+    }
+    if (!currentUser) {
+        alert('无法获取用户信息，请刷新页面重试。');
+        return;
+    }
 
-        // 1. 前置检查
-        if (!isModelLoaded) {
-            alert('请先选择并成功加载一个模型！');
-            return;
-        }
-        if (!document.getElementById('novelText').value.trim()) {
-            alert('请输入小说文本！');
-            return;
-        }
-        if (!currentUser) {
-            alert('无法获取用户信息，请刷新页面重试。');
-            return;
-        }
+    const numScenes = parseInt(document.getElementById('numScenes').value);
+    const requiredCredits = numScenes * 100;
+    const text = document.getElementById('novelText').value;
+    const steps = document.getElementById('steps').value;
+    const guidance = document.getElementById('guidance').value;
+    const width = document.getElementById('width').value;
+    const height = document.getElementById('height').value;
 
-        const numScenes = parseInt(document.getElementById('numScenes').value);
-        const requiredCredits = numScenes * 100;
-        const text = document.getElementById('novelText').value;
-        const steps = document.getElementById('steps').value;
-        const guidance = document.getElementById('guidance').value;
-        const width = document.getElementById('width').value;
-        const height = document.getElementById('height').value;
+    if (currentUser.credits < requiredCredits) {
+        alert(`积分不足！\n\n本次生成需要: ${requiredCredits} 积分\n您当前拥有: ${currentUser.credits} 积分\n\n请减少场景数量或等待明天积分重置。`);
+        return;
+    }
 
-        if (currentUser.credits < requiredCredits) {
-            alert(`积分不足！\n\n本次生成需要: ${requiredCredits} 积分\n您当前拥有: ${currentUser.credits} 积分\n\n请减少场景数量或等待明天积分重置。`);
-            return;
-        }
+    // 禁用生成按钮
+    const generateBtn = document.getElementById('generateBtn');
+    generateBtn.disabled = true;
+    generateBtn.textContent = '提交任务中...';
 
-        const params = {
+    try {
+        // 构建查询参数 - 确保这行代码存在
+        const params = new URLSearchParams({
             text: text,
             num_scenes: numScenes,
             steps: steps,
             guidance: guidance,
             width: width,
             height: height
-        };
+        });
 
-        sessionStorage.setItem('comicParams', JSON.stringify(params));
-        window.location.href = '/pic';
+        // 提交生成任务
+        const response = await fetch(`/novel-to-comic-stream?${params.toString()}`, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
 
-        // 2. 所有检查通过，调用核心生成函数
-        generateComic();
+        if (!response.ok) {
+            // 尝试解析错误信息
+            let errorMsg = `服务器错误: ${response.status}`;
+            try {
+                const errorData = await response.json();
+                errorMsg = errorData.detail || errorMsg;
+            } catch (e) {
+                // 忽略JSON解析错误
+            }
+            throw new Error(errorMsg);
+        }
+
+        const result = await response.json();
+        const taskId = result.task_id;
+
+        // 确保任务ID存在
+        if (!taskId) {
+            throw new Error("服务器未返回任务ID");
+        }
+
+        // 存储task_id到sessionStorage，并跳转到pic页面
+        sessionStorage.setItem('current_task_id', taskId);
+        window.location.href = `/pic?task_id=${encodeURIComponent(taskId)}`;
+
+    } catch (error) {
+        console.error('提交任务失败:', error);
+        alert('提交任务失败: ' + error.message);
+        
+        // 恢复按钮状态
+        generateBtn.disabled = false;
+        generateBtn.textContent = '生成漫画';
     }
-
-
-
+}
     // --- 图生图功能 ---
     function goToImg2Img() {
         // 构建8081端口的img2img URL

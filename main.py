@@ -20,6 +20,8 @@ from datetime import timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import Depends, status
 from service.database import get_db
+from task_manager import router as task_router
+from service.task_queue_service import task_queue
 
 import functools
 from fastapi import Query
@@ -29,7 +31,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="小说转漫画API")
-
+app.include_router(task_router, prefix="/tasks")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 app.mount("/templates", StaticFiles(directory="templates"), name="templates")
 
@@ -301,19 +303,12 @@ async def novel_to_comic_stream(
     width: int = 512,
     height: int = 512,
     db: AsyncSession = Depends(get_db),
-    current_user: datamodels.User = Depends(auth.get_current_user) # 保护该端点
+    current_user: datamodels.User = Depends(auth.get_current_user)
 ):
-    """
-    处理小说到漫画的流式生成请求。
-    1. 验证用户身份。
-    2. 检查并扣除积分。
-    3. 调用核心生成器函数。
-    """
+    """处理小说到漫画的流式生成请求（现在通过任务队列）"""
     # 计算所需积分
     required_credits = num_scenes * 100
     if current_user.credits < required_credits:
-        # 这里不能直接 raise HTTPException，因为前端期望的是流式响应。
-        # 我们需要通过流发送一个错误消息。
         async def insufficient_credits_stream():
             error_data = {
                 "type": "error",
@@ -327,23 +322,41 @@ async def novel_to_comic_stream(
     current_user.credits -= required_credits
     db.add(current_user)
     await db.commit()
-    await db.refresh(current_user) # 刷新以获取数据库中的最新状态
-
-    # 调用独立的生成器函数，并将所有必要的参数传递给它
-    return StreamingResponse(
-        generate_scenes(
-            text=text,
-            num_scenes=num_scenes,
-            steps=steps,
-            guidance=guidance,
-            width=width,
-            height=height,
-            db=db, # 传递 db 会话
-            current_user=current_user # 传递当前用户对象
-        ),
-        media_type="text/event-stream"
+    await db.refresh(current_user)
+    
+    # 提交任务到队列
+    task_params = {
+        "text": text,
+        "num_scenes": num_scenes,
+        "steps": steps,
+        "guidance": guidance,
+        "width": width,
+        "height": height,
+        "db": db,
+        "current_user": current_user
+    }
+    
+    task_id = await task_queue.submit_task(
+        generate_scenes_wrapper,  # 包装后的生成函数
+        **task_params
     )
+    
+    # 返回任务ID而不是直接生成结果
+    return {"task_id": task_id}
 
+async def generate_scenes_wrapper(**kwargs):
+    """包装原有的generate_scenes函数以适配任务队列"""
+    # 从参数中获取回调函数（任务队列传递）
+    progress_callback = kwargs.pop("progress_callback", None)
+    
+    # 调用原有的generate_scenes函数，但改为返回结果而不是流
+    results = []
+    
+    # 修改generate_scenes函数，使其接受一个收集结果的回调
+    async for result in generate_scenes(progress_callback=progress_callback, **kwargs):
+        results.append(result)
+    
+    return results
 async def generate_scenes(
     text: str,
     num_scenes: int,
@@ -353,11 +366,18 @@ async def generate_scenes(
     height: int,
     db: AsyncSession,
     current_user: datamodels.User,
+    progress_callback: callable = None  # 新增进度回调参数
 ):
+    # 在函数内部，使用progress_callback报告进度
     global current_generation_task, pending_regeneration_request
-
+    
     logger.info(f"User {current_user.username} starting generation. Credits left: {current_user.credits}")
     session_id = str(uuid.uuid4())
+    
+    # 报告进度
+    if progress_callback:
+        progress_callback(0, "准备生成场景")
+    
     try:
         logger.info(f"开始处理请求, 参数: num_scenes={num_scenes}, steps={steps}, guidance={guidance}")
         logger.info(f"开始处理请求，会话ID: {session_id}")
@@ -419,10 +439,39 @@ async def generate_scenes(
                     break
         else:
             logger.info("未检测到已加载LoRA")
-
+         # 报告进度
+        if progress_callback:
+            progress_callback(5, "构思故事情节和分镜")
+        
+        # 【核心修改】明确使用 process_novel_to_scenes
+        scenes_data = await deepseek.process_novel_to_scenes(text, num_scenes)
+        
+        # 报告进度
+        if progress_callback:
+            progress_callback(10, "场景分割完成")
+        
+        # 提取纯中文字符串列表
+        chinese_descriptions_list = [scene.get("chinese_description", "") for scene in scenes_data]
+        
+        # 发送 'start' 事件作为结果
+        start_event = {
+            "type": "start",
+            "total_scenes": len(scenes_data),
+            "scenes": chinese_descriptions_list,
+            "session_id": session_id
+        }
+        yield start_event
+        
+        # 报告进度
+        if progress_callback:
+            progress_callback(15, "开始生成图片")
         # --- 生成图片 ---
-        logger.info("开始生成图片...")
         for i, scene_info in enumerate(scenes_data):
+            # 报告进度
+            if progress_callback:
+                progress = 15 + int((i + 1) / len(scenes_data) * 80)
+                progress_callback(progress, f"生成第 {i + 1}/{len(scenes_data)} 个场景")
+            
             logger.info(f"处理第 {i + 1}/{len(scenes_data)} 个场景")
             try:
                 chinese_description = scene_info.get("chinese_description", "（无描述）")
@@ -503,16 +552,30 @@ async def generate_scenes(
                 error_msg = f"场景 {i + 1} 生成失败: {str(e)}\n{traceback.format_exc()}"
                 logger.error(error_msg)
                 yield f"data: {json.dumps({'type': 'scene_error', 'index': i, 'message': str(e)})}\n\n"
-
-        yield f"data: {json.dumps({'type': 'all_images_generated', 'session_id': session_id})}\n\n"
-        yield f"data: {json.dumps({'type': 'complete', 'new_credit_balance': current_user.credits})}\n\n"
-
+        result = {
+                "type": "scene",
+                "index": i,
+                "description": chinese_description,
+                "image_url": image_url
+            }
+        yield result
+        yield {
+            "type": "all_images_generated",
+            "session_id": session_id
+        }
+        yield {
+            "type": "complete",
+            "new_credit_balance": current_user.credits
+        }
+        
     except Exception as e:
-        current_generation_task = None  # 【修改5】异常时清空任务记录
+        # 报告错误
         error_msg = f"错误: {str(e)}\n{traceback.format_exc()}"
         logger.error(error_msg)
-        yield f"data: {json.dumps({'type': 'error', 'message': error_msg})}\n\n"
-
+        yield {
+            "type": "error",
+            "message": error_msg
+        }
 
 @app.post("/save-scene-descriptions")
 async def save_scene_descriptions(request: dict):
