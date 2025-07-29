@@ -6,7 +6,6 @@ from diffusers import (
     StableDiffusionPipeline,
     DPMSolverMultistepScheduler,
     StableDiffusionXLPipeline,
-    KolorsPipeline,
 )
 from diffusers.loaders import LoraLoaderMixin
 from PIL import Image

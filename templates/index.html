@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>小说转漫画服务</title>
+    <script src="/templates/js/character_management.js"></script>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -192,6 +193,81 @@
         .img2img-btn:hover {
             background-color: #138496;
         }
+
+        /* 人物形象展示分类标签栏样式 */
+        .category-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #e9ecef;
+            padding-bottom: 10px;
+        }
+
+        .tab-item {
+            padding: 10px 20px;
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px 8px 0 0;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 500;
+            color: #6c757d;
+        }
+
+        .tab-item:hover {
+            background-color: #e9ecef;
+            color: #495057;
+        }
+
+        .tab-item.active {
+            background-color: #007bff;
+            color: white;
+            border-color: #007bff;
+        }
+
+        /* 形象网格样式 */
+        .character-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+            max-height: 300px;
+            overflow-y: auto;
+            padding: 10px;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            background-color: #f8f9fa;
+        }
+
+        .character-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 10px;
+            border: 2px solid transparent;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background-color: white;
+        }
+
+        .character-item:hover {
+            border-color: #007bff;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 123, 255, 0.2);
+        }
+
+        .character-item.selected {
+            border-color: #28a745;
+            background-color: #d4edda;
+        }
+
+        .character-item img {
+            width: 100px;
+            height: 100px;
+            object-fit: cover;
+            border-radius: 8px;
+        }
     </style>
 </head>
 <body>
@@ -231,6 +307,43 @@
                 </button>
             </div>
             <div id="modelStatus" class="message-box" style="display: none;"></div>
+        </div>
+
+        <!-- 故事主角形象管理模块 -->
+        <div class="section-box">
+            <h3>主角形象管理</h3>
+            <div id="currentCharacterInfo">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <img id="currentCharacterImage" src="" alt="当前主角形象" style="width: 60px; height: 60px; object-fit: cover; border-radius: 8px; border: 2px solid #ddd;">
+                        <span id="currentCharacterText"></span>
+                    </div>
+                    <button id="changeCharacterBtn" onclick="showCharacterSelection()" class="warning">选择形象</button>
+                </div>
+            </div>
+            <div id="characterSelectionArea" style="display: none;">
+                <div class="character-controls">
+                    <!-- 分类标签栏 -->
+                    <div class="category-tabs">
+                        <div class="tab-item active" data-category="玄幻" onclick="switchCategory('玄幻')">玄幻</div>
+                        <div class="tab-item" data-category="仙侠" onclick="switchCategory('仙侠')">仙侠</div>
+                        <div class="tab-item" data-category="古风" onclick="switchCategory('古风')">古风</div>
+                        <div class="tab-item" data-category="都市" onclick="switchCategory('都市')">都市</div>
+                        <div class="tab-item" data-category="童话" onclick="switchCategory('童话')">童话</div>
+                    </div>
+                    
+                    <!-- 形象选择区域 -->
+                    <div id="characterGrid" class="character-grid">
+                        <!-- 形象图片将在这里动态显示 -->
+                    </div>
+                    
+                    <div style="margin-top: 15px;">
+                        <button id="confirmCharacterBtn" class="confirm-btn" onclick="confirmCharacter()" disabled>确认选择</button>
+                        <button onclick="hideCharacterSelection()" style="background-color: #6c757d;">取消</button>
+                    </div>
+                </div>
+            </div>
+            <div id="characterStatus" class="message-box" style="display: none;"></div>
         </div>
 
         <!-- LoRA风格管理模块 -->
@@ -295,6 +408,9 @@
             await checkModelStatus();
             await loadLorasToSelect();
             await updateLoraStatus();
+            // 初始化主角形象管理模块
+            await characterManagement.checkCharacterStatus();
+            characterManagement.initCharacterManagement();
         }
     }
 
