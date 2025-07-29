@@ -31,6 +31,7 @@ logger = logging.getLogger(__name__)
 app = FastAPI(title="小说转漫画API")
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount("/templates", StaticFiles(directory="templates"), name="templates")
 
 # 创建全局的diffusion服务实例
 diffusion_service = LocalDiffusionService()
@@ -53,6 +54,9 @@ class LoadLoraRequest(BaseModel):
 
 class SetLoraScaleRequest(BaseModel):
     scale: float
+
+class CharacterRequest(BaseModel):
+    character_name: str
 
 # --- 登录端点 ---
 @app.post("/token", response_model=schemas.Token)
@@ -127,7 +131,6 @@ async def pic_page():
 
 from fastapi import Request
 
-# ... 你已有代码 ...
 @app.get("/available-loras")
 async def available_loras():
     try:
@@ -155,6 +158,7 @@ async def set_lora(request: SetLoraRequest):
     except Exception as e:
         logger.error(f"设置LoRA失败: {str(e)}")
         return {"success": False, "message": str(e)}
+    
 @app.post("/unload-lora")
 async def unload_lora():
     try:
@@ -735,6 +739,139 @@ async def create_video(request: dict):
         import traceback
         logger.error(f"详细错误信息: {traceback.format_exc()}")
         return {"success": False, "message": str(e)}
+
+# --- 主角形象管理端点 ---
+@app.get("/available-characters")
+async def get_available_characters(category: str = None):
+    """获取可用的主角形象列表，支持按分类筛选"""
+    try:
+        character_dir = "static/character_images"
+        characters = []
+        
+        if category:
+            # 如果指定了分类，只获取该分类下的形象
+            category_dir = os.path.join(character_dir, category)
+            if os.path.exists(category_dir):
+                for filename in os.listdir(category_dir):
+                    if filename.lower().endswith(('.png', '.jpg', '.jpeg', '.webp')):
+                        name = os.path.splitext(filename)[0].replace('_', ' ')
+                        characters.append({
+                            "name": name,
+                            "filename": filename,
+                            "category": category,
+                            "path": f"{category}/{filename}"
+                        })
+        else:
+            # 如果没有指定分类，获取所有分类的形象
+            if os.path.exists(character_dir):
+                for category_name in os.listdir(character_dir):
+                    category_path = os.path.join(character_dir, category_name)
+                    if os.path.isdir(category_path):
+                        for filename in os.listdir(category_path):
+                            if filename.lower().endswith(('.png', '.jpg', '.jpeg', '.webp')):
+                                name = os.path.splitext(filename)[0].replace('_', ' ')
+                                characters.append({
+                                    "name": name,
+                                    "filename": filename,
+                                    "category": category_name,
+                                    "path": f"{category_name}/{filename}"
+                                })
+        
+        return {"characters": characters}
+    except Exception as e:
+        logger.error(f"获取主角形象列表失败: {str(e)}")
+        return {"characters": []}
+
+@app.get("/available-categories")
+async def get_available_categories():
+    """获取可用的主角形象分类"""
+    try:
+        character_dir = "static/character_images"
+        categories = []
+        
+        if os.path.exists(character_dir):
+            for item in os.listdir(character_dir):
+                item_path = os.path.join(character_dir, item)
+                if os.path.isdir(item_path):
+                    # 检查目录中是否有图片文件
+                    has_images = any(
+                        filename.lower().endswith(('.png', '.jpg', '.jpeg', '.webp'))
+                        for filename in os.listdir(item_path)
+                    )
+                    if has_images:
+                        categories.append(item)
+        
+        return {"categories": categories}
+    except Exception as e:
+        logger.error(f"获取主角形象分类失败: {str(e)}")
+        return {"categories": []}
+
+@app.post("/set-character")
+async def set_character(request: CharacterRequest):
+    """设置当前主角形象"""
+    try:
+        character_name = request.character_name
+        # 支持完整路径格式（包含分类）
+        if '/' in character_name:
+            character_path = f"static/character_images/{character_name}"
+        else:
+            # 向后兼容：如果没有分类信息，尝试在所有分类中查找
+            character_dir = "static/character_images"
+            character_path = None
+            
+            if os.path.exists(character_dir):
+                for category in os.listdir(character_dir):
+                    category_path = os.path.join(character_dir, category)
+                    if os.path.isdir(category_path):
+                        test_path = os.path.join(category_path, character_name)
+                        if os.path.exists(test_path):
+                            character_path = test_path
+                            character_name = f"{category}/{character_name}"
+                            break
+            
+            if not character_path:
+                return {"success": False, "message": "主角形象文件不存在"}
+        
+        if not os.path.exists(character_path):
+            return {"success": False, "message": "主角形象文件不存在"}
+        
+        # 解析分类和文件名
+        if '/' in character_name:
+            category, filename = character_name.split('/', 1)
+        else:
+            category = "未知分类"
+            filename = character_name
+        
+        # 将选中的主角形象信息存储到全局变量或配置中
+        global current_character
+        current_character = {
+            "name": os.path.splitext(filename)[0].replace('_', ' '),
+            "filename": filename,
+            "category": category,
+            "path": character_name
+        }
+        
+        logger.info(f"主角形象已设置为: {character_name}")
+        return {"success": True, "message": f"主角形象设置成功: {current_character['name']}"}
+    except Exception as e:
+        logger.error(f"设置主角形象失败: {str(e)}")
+        return {"success": False, "message": f"设置主角形象失败: {str(e)}"}
+
+@app.get("/character-status")
+async def get_character_status():
+    """获取当前主角形象状态"""
+    try:
+        global current_character
+        if hasattr(globals(), 'current_character') and current_character:
+            return {"selected_character": current_character}
+        else:
+            return {"selected_character": None}
+    except Exception as e:
+        logger.error(f"获取主角形象状态失败: {str(e)}")
+        return {"selected_character": None}
+
+# 初始化全局变量
+current_character = None
 
 if __name__ == "__main__":
     logger.info("启动服务器...")
