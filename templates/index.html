@@ -268,6 +268,42 @@
             object-fit: cover;
             border-radius: 8px;
         }
+
+        /* 生成模式标签栏样式，一键式生成和自定义生成 */
+        .generation-mode-tabs {
+            display: flex;
+            gap: 10px;
+            margin: 20px 0;
+            border-bottom: 2px solid #e9ecef;
+            padding-bottom: 10px;
+        }
+
+        .mode-tab-item {
+            padding: 12px 24px;
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px 8px 0 0;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 500;
+            color: #6c757d;
+            font-size: 16px;
+        }
+
+        .mode-tab-item:hover {
+            background-color: #e9ecef;
+            color: #495057;
+        }
+
+        .mode-tab-item.active {
+            background-color: #007bff;
+            color: white;
+            border-color: #007bff;
+        }
+
+        .generation-mode-content {
+            margin-top: 20px;
+        }
     </style>
 </head>
 <body>
@@ -284,84 +320,99 @@
     <div>
         <textarea id="novelText" placeholder="在此输入一段奇妙的冒险故事..."></textarea>
 
-        <div class="section-box">
-            <h3>模型管理</h3>
-            <div id="currentModelInfo">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <span id="currentModelText"></span>
-                    <button id="changeModelBtn" onclick="showModelSelection()" class="warning">切换模型</button>
-                </div>
-            </div>
-            <div id="modelSelectionArea">
-                <div class="model-controls">
-                    <label for="modelSelect">选择新模型:</label>
-                    <select id="modelSelect"></select>
-                    <button id="confirmModelBtn" class="confirm-btn" onclick="confirmModel()" disabled>确认加载</button>
-                    <button onclick="hideModelSelection()" style="background-color: #6c757d;">取消</button>
-                </div>
-            </div>
-            <div id="initialModelSelection" class="model-controls">
-                <label for="initialModelSelect">选择模型:</label>
-                <select id="initialModelSelect"></select>
-                <button id="initialConfirmBtn" class="confirm-btn" onclick="confirmInitialModel()" disabled>确认加载
-                </button>
-            </div>
-            <div id="modelStatus" class="message-box" style="display: none;"></div>
+        <!-- 生成模式选择标签栏 -->
+        <div class="generation-mode-tabs">
+            <div class="mode-tab-item active" data-mode="quick" onclick="switchGenerationMode('quick')">一键式生成</div>
+            <div class="mode-tab-item" data-mode="custom" onclick="switchGenerationMode('custom')">自定义生成</div>
         </div>
 
-        <!-- 故事主角形象管理模块 -->
-        <div class="section-box">
-            <h3>主角形象管理</h3>
-            <div id="currentCharacterInfo">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <div style="display: flex; align-items: center; gap: 10px;">
-                        <img id="currentCharacterImage" src="" alt="当前主角形象" style="width: 60px; height: 60px; object-fit: cover; border-radius: 8px; border: 2px solid #ddd;">
-                        <span id="currentCharacterText"></span>
-                    </div>
-                    <button id="changeCharacterBtn" onclick="showCharacterSelection()" class="warning">选择形象</button>
-                </div>
-            </div>
-            <div id="characterSelectionArea" style="display: none;">
-                <div class="character-controls">
-                    <!-- 分类标签栏 -->
-                    <div class="category-tabs">
-                        <div class="tab-item active" data-category="玄幻" onclick="switchCategory('玄幻')">玄幻</div>
-                        <div class="tab-item" data-category="仙侠" onclick="switchCategory('仙侠')">仙侠</div>
-                        <div class="tab-item" data-category="古风" onclick="switchCategory('古风')">古风</div>
-                        <div class="tab-item" data-category="都市" onclick="switchCategory('都市')">都市</div>
-                        <div class="tab-item" data-category="童话" onclick="switchCategory('童话')">童话</div>
-                    </div>
-                    
-                    <!-- 形象选择区域 -->
-                    <div id="characterGrid" class="character-grid">
-                        <!-- 形象图片将在这里动态显示 -->
-                    </div>
-                    
-                    <div style="margin-top: 15px;">
-                        <button id="confirmCharacterBtn" class="confirm-btn" onclick="confirmCharacter()" disabled>确认选择</button>
-                        <button onclick="hideCharacterSelection()" style="background-color: #6c757d;">取消</button>
+        <!-- 一键式生成模式 -->
+        <div id="quickMode" class="generation-mode-content">
+            <!-- 故事主角形象管理模块 -->
+            <div class="section-box">
+                <h3>主角形象管理</h3>
+                <div id="currentCharacterInfo">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <img id="currentCharacterImage" src="" alt="当前主角形象" style="width: 60px; height: 60px; object-fit: cover; border-radius: 8px; border: 2px solid #ddd;">
+                            <span id="currentCharacterText"></span>
+                        </div>
+                        <button id="changeCharacterBtn" onclick="showCharacterSelection()" class="warning">选择形象</button>
                     </div>
                 </div>
+                <div id="characterSelectionArea" style="display: none;">
+                    <div class="character-controls">
+                        <!-- 分类标签栏 -->
+                        <div class="category-tabs">
+                            <div class="tab-item active" data-category="玄幻" onclick="switchCategory('玄幻')">玄幻</div>
+                            <div class="tab-item" data-category="仙侠" onclick="switchCategory('仙侠')">仙侠</div>
+                            <div class="tab-item" data-category="古风" onclick="switchCategory('古风')">古风</div>
+                            <div class="tab-item" data-category="都市" onclick="switchCategory('都市')">都市</div>
+                            <div class="tab-item" data-category="童话" onclick="switchCategory('童话')">童话</div>
+                        </div>
+                        
+                        <!-- 形象选择区域 -->
+                        <div id="characterGrid" class="character-grid">
+                            <!-- 形象图片将在这里动态显示 -->
+                        </div>
+                        
+                        <div style="margin-top: 15px;">
+                            <button id="confirmCharacterBtn" class="confirm-btn" onclick="confirmCharacter()" disabled>确认选择</button>
+                            <button onclick="hideCharacterSelection()" style="background-color: #6c757d;">取消</button>
+                        </div>
+                    </div>
+                </div>
+                <div id="characterStatus" class="message-box" style="display: none;"></div>
             </div>
-            <div id="characterStatus" class="message-box" style="display: none;"></div>
         </div>
 
-        <!-- LoRA风格管理模块 -->
-        <div class="section-box">
-            <h3>风格管理</h3>
-            <label for="loraSelect">选择风格:</label>
-            <select id="loraSelect" style="width: 100%; padding: 8px; margin-bottom: 8px;">
-                <option value="">加载失败或无风格</option>
-            </select>
-            <label for="loraScaleInput">权重 scale (0.0 - 2.0):</label>
-            <input type="number" id="loraScaleInput" min="0" max="2" step="0.1" value="1.0" style="width: 100px; margin-bottom: 8px;">
-            <div>
-                <button id="loadLoraBtn" style="margin-right: 10px;">加载风格</button>
-                <button id="unloadLoraBtn">卸载风格</button>
+        <!-- 自定义生成模式 -->
+        <div id="customMode" class="generation-mode-content" style="display: none;">
+            <div class="section-box">
+                <h3>模型管理</h3>
+                <div id="currentModelInfo">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span id="currentModelText"></span>
+                        <button id="changeModelBtn" onclick="showModelSelection()" class="warning">切换模型</button>
+                    </div>
+                </div>
+                <div id="modelSelectionArea">
+                    <div class="model-controls">
+                        <label for="modelSelect">选择新模型:</label>
+                        <select id="modelSelect"></select>
+                        <button id="confirmModelBtn" class="confirm-btn" onclick="confirmModel()" disabled>确认加载</button>
+                        <button onclick="hideModelSelection()" style="background-color: #6c757d;">取消</button>
+                    </div>
+                </div>
+                <div id="initialModelSelection" class="model-controls">
+                    <label for="initialModelSelect">选择模型:</label>
+                    <select id="initialModelSelect"></select>
+                    <button id="initialConfirmBtn" class="confirm-btn" onclick="confirmInitialModel()" disabled>确认加载
+                    </button>
+                </div>
+                <div id="modelStatus" class="message-box" style="display: none;"></div>
             </div>
-            <div id="loraStatusMessage" style="margin-top: 8px; color: #555;"></div>
+
+            <!-- LoRA风格管理模块 -->
+            <div class="section-box">
+                <h3>风格管理</h3>
+                <label for="loraSelect">选择风格:</label>
+                <select id="loraSelect" style="width: 100%; padding: 8px; margin-bottom: 8px;">
+                    <option value="">加载失败或无风格</option>
+                </select>
+                <label for="loraScaleInput">权重 scale (0.0 - 2.0):</label>
+                <input type="number" id="loraScaleInput" min="0" max="2" step="0.1" value="1.0" style="width: 100px; margin-bottom: 8px;">
+                <div>
+                    <button id="loadLoraBtn" style="margin-right: 10px;">加载风格</button>
+                    <button id="unloadLoraBtn">卸载风格</button>
+                </div>
+                <div id="loraStatusMessage" style="margin-top: 8px; color: #555;"></div>
+            </div>
+
         </div>
 
+    
+        <!-- 通用生成参数和按钮 -->
         <div class="section-box">
             <h3>生成参数</h3>
             <div class="param-grid">
@@ -718,6 +769,24 @@
     }
 
 
+
+    // --- 生成模式切换功能 ---
+    function switchGenerationMode(mode) {
+        // 更新标签栏状态
+        document.querySelectorAll('.mode-tab-item').forEach(tab => {
+            tab.classList.remove('active');
+        });
+        document.querySelector(`[data-mode="${mode}"]`).classList.add('active');
+        
+        // 显示/隐藏对应的内容区域
+        if (mode === 'quick') {
+            document.getElementById('quickMode').style.display = 'block';
+            document.getElementById('customMode').style.display = 'none';
+        } else if (mode === 'custom') {
+            document.getElementById('quickMode').style.display = 'none';
+            document.getElementById('customMode').style.display = 'block';
+        }
+    }
 
     // --- 图生图功能 ---
     function goToImg2Img() {
