@@ -40,6 +40,17 @@ diffusion_service = LocalDiffusionService()
 current_generation_task = None
 pending_regeneration_request = None  # 新增：存储待处理的重新生成请求
 
+async def load_sdxl_ip_adapter_model_async():
+    """异步加载SDXL-IP-Adapter模型"""
+    try:
+        logger.info("开始异步加载SDXL-IP-Adapter模型...")
+        diffusion_service.load_sdxl_ip_adapter_model()
+        logger.info("SDXL-IP-Adapter模型异步加载完成")
+        return True
+    except Exception as e:
+        logger.error(f"异步加载SDXL-IP-Adapter模型失败: {str(e)}")
+        raise
+
 
 class NovelRequest(BaseModel):
     text: str
@@ -300,6 +311,7 @@ async def novel_to_comic_stream(
     guidance: float = 7.5,
     width: int = 512,
     height: int = 512,
+    mode: str = 'custom',
     db: AsyncSession = Depends(get_db),
     current_user: datamodels.User = Depends(auth.get_current_user) # 保护该端点
 ):
@@ -338,6 +350,7 @@ async def novel_to_comic_stream(
             guidance=guidance,
             width=width,
             height=height,
+            mode=mode,
             db=db, # 传递 db 会话
             current_user=current_user # 传递当前用户对象
         ),
@@ -351,6 +364,7 @@ async def generate_scenes(
     guidance: float,
     width: int,
     height: int,
+    mode: str,
     db: AsyncSession,
     current_user: datamodels.User,
 ):
@@ -368,33 +382,68 @@ async def generate_scenes(
         deepseek = DeepSeekService()
 
 
-        # 确保模型已经加载
-
-        if diffusion_service.model_name is None:
-            error_msg = "请先选择并加载模型"
-            logger.error(error_msg)
-            yield f"data: {json.dumps({'type': 'error', 'message': error_msg})}\n\n"
-            return
-
-        if not diffusion_service.is_model_loaded():
-            logger.info("模型未加载，开始自动加载...")
-            yield f"data: {json.dumps({'type': 'info', 'message': f'模型 {diffusion_service.model_name} 未加载，正在自动加载中...'})}\n\n"
+        # 根据模式加载不同的模型
+        if mode == "quick":
+            # 一键式生成模式：并行处理模型加载和场景分析
+            logger.info("一键式生成模式：并行处理模型加载和场景分析...")
+            yield f"data: {json.dumps({'type': 'info', 'message': '正在并行处理模型加载和场景分析...'})}\n\n"
+            
             try:
-                diffusion_service.preload_model()
-                yield f"data: {json.dumps({'type': 'info', 'message': '模型加载完成，开始生成...'})}\n\n"
+                # 并行执行模型加载和场景分析
+                model_load_task = asyncio.create_task(load_sdxl_ip_adapter_model_async())
+                scenes_task = asyncio.create_task(deepseek.process_novel_to_scenes(text, num_scenes))
+                
+                # 等待两个任务都完成
+                model_result, scenes_data = await asyncio.gather(
+                    model_load_task, 
+                    scenes_task,
+                    return_exceptions=True
+                )
+                
+                # 检查是否有异常
+                if isinstance(model_result, Exception):
+                    error_msg = f"模型加载失败: {str(model_result)}"
+                    logger.error(error_msg)
+                    yield f"data: {json.dumps({'type': 'error', 'message': error_msg})}\n\n"
+                    return
+                    
+                if isinstance(scenes_data, Exception):
+                    error_msg = f"场景分析失败: {str(scenes_data)}"
+                    logger.error(error_msg)
+                    yield f"data: {json.dumps({'type': 'error', 'message': error_msg})}\n\n"
+                    return
+                
+                yield f"data: {json.dumps({'type': 'info', 'message': '模型加载和场景分析完成'})}\n\n"
+                
             except Exception as e:
-                error_msg = f"模型加载失败: {str(e)}"
+                error_msg = f"并行处理失败: {str(e)}"
+                logger.error(error_msg)
+                yield f"data: {json.dumps({'type': 'error', 'message': error_msg})}\n\n"
+                return
+        else:
+            # 自定义生成模式：使用原有的模型加载逻辑
+            if diffusion_service.model_name is None:
+                error_msg = "请先选择并加载模型"
                 logger.error(error_msg)
                 yield f"data: {json.dumps({'type': 'error', 'message': error_msg})}\n\n"
                 return
 
+            if not diffusion_service.is_model_loaded():
+                logger.info("模型未加载，开始自动加载...")
+                yield f"data: {json.dumps({'type': 'info', 'message': f'模型 {diffusion_service.model_name} 未加载，正在自动加载中...'})}\n\n"
+                try:
+                    diffusion_service.preload_model()
+                    yield f"data: {json.dumps({'type': 'info', 'message': '模型加载完成，开始生成...'})}\n\n"
+                except Exception as e:
+                    error_msg = f"模型加载失败: {str(e)}"
+                    logger.error(error_msg)
+                    yield f"data: {json.dumps({'type': 'error', 'message': error_msg})}\n\n"
+                    return
+
         # 分割场景（得到中文描述）
-        yield f"data: {json.dumps({'type': 'info', 'message': '正在构思故事情节和分镜...'})}\n\n"
-
-
-
-        # 【核心修改】明确使用 process_novel_to_scenes
-        scenes_data = await deepseek.process_novel_to_scenes(text, num_scenes)
+        if mode != "quick":  # 在quick模式中，场景分析已经在并行处理中完成
+            yield f"data: {json.dumps({'type': 'info', 'message': '正在构思故事情节和分镜...'})}\n\n"
+            scenes_data = await deepseek.process_novel_to_scenes(text, num_scenes)
 
 
         # --- 3. 【核心修改】适配前端协议 ---
@@ -449,14 +498,23 @@ async def generate_scenes(
 
                 loop = asyncio.get_event_loop()
 
-                import functools
+                # 一键式生成模式，设置ip-adapter的参考图片
+                if mode == "quick":
+                    from PIL import Image
 
+                    ref_image_path = f"static/character_images/{current_character['path']}"
+                    image=Image.open(ref_image_path)
+                    image.resize((512, 512))
+                    diffusion_service.ip_adapter_ref_image = image
+                    
+                import functools
                 target_for_executor = functools.partial(
                     diffusion_service.generate_image_with_style,
                     prompt=prompt_for_drawing, style="comic",
                     steps=steps, guidance_scale=guidance,
-                    width=width, height=height, callback=progress_callback
+                    width=width, height=height, mode=mode, callback=progress_callback
                 )
+
                 gen_task = loop.run_in_executor(None, target_for_executor)
                 current_generation_task = gen_task  # 【修改1】记录当前任务
 

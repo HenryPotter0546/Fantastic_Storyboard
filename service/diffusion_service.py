@@ -23,6 +23,8 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
+global ip_adapter_ref_image
+
 
 class LocalDiffusionService:
     _lora_lock = threading.Lock()
@@ -199,10 +201,41 @@ class LocalDiffusionService:
                         local_files_only=False,
                     )
             elif model_type.lower() == 'kolors':
+                from diffusers import KolorsPipeline
                 self.pipeline = KolorsPipeline.from_pretrained(
                     model_path,
                     torch_dtype=torch.float16,
                 )
+            elif model_type.lower() == 'ip-adapter':
+
+                # copy from https://github.com/tencent-ailab/IP-Adapter/blob/main/ip_adapter_sdxl_controlnet_demo.ipynb
+                
+                from diffusers import StableDiffusionXLControlNetPipeline, ControlNetModel, StableDiffusionXLPipeline
+                from ip_adapter import IPAdapterXL
+
+                # controlnet_path = "diffusers/controlnet-depth-sdxl-1.0"
+                controlnet_path = self.model_config['controlnet_path']
+                image_encoder_path = self.model_config['image_encoder_path']
+                ip_ckpt = self.model_config['ip_ckpt']
+
+                # load SDXL pipeline
+                controlnet = ControlNetModel.from_pretrained(controlnet_path, variant="fp16", use_safetensors=True, torch_dtype=torch.float16)
+                pipe = StableDiffusionXLControlNetPipeline.from_pretrained(
+                    model_path,
+                    controlnet=controlnet,
+                    use_safetensors=True,
+                    torch_dtype=torch.float16,
+                    add_watermarker=False,
+                )
+
+                # load ip-adapter
+                self.pipeline = IPAdapterXL(pipe, image_encoder_path, ip_ckpt)
+
+                # image = Image.open("assets/images/statue.png")
+                # depth_map = Image.open("assets/structure_controls/depth.png").resize((1024, 1024))
+
+                # images = ip_model.generate(pil_image=image, image=depth_map, controlnet_conditioning_scale=0.7, num_inference_steps=30, seed=42)
+
             else:
                 raise ValueError(f"未知模型类型: {model_type}")
 
@@ -472,6 +505,23 @@ class LocalDiffusionService:
                 logger.error(f"设置LoRA权重scale失败: {str(e)}")
                 raise
 
+    def load_sdxl_ip_adapter_model(self):
+        """加载SDXL-IP-Adapter模型用于一键式生成"""
+        try:
+            logger.info("开始加载SDXL-IP-Adapter模型...")
+            
+            # 设置模型为SDXL-IP-Adapter（需要在config/model.yaml中配置）
+            self.set_model("sdxl-ip-adapter")
+            
+            # 预加载模型
+            self.preload_model()
+            
+            logger.info("SDXL-IP-Adapter模型加载完成")
+            
+        except Exception as e:
+            logger.error(f"加载SDXL-IP-Adapter模型失败: {str(e)}")
+            raise
+
     def generate_image(
         self,
         prompt: str,
@@ -480,6 +530,7 @@ class LocalDiffusionService:
         guidance_scale: float = 7.5,
         width: int = 512,
         height: int = 512,
+        mode: str = "custom",
         callback: Optional[Callable] = None,
     ) -> str:
         """生成图片并返回base64编码的图片数据"""
@@ -508,14 +559,27 @@ class LocalDiffusionService:
 
             with torch.no_grad():
                 # 准备生成参数
-                generate_kwargs = {
-                    "prompt": prompt,
-                    "negative_prompt": negative_prompt,
-                    "num_inference_steps": steps,
-                    "guidance_scale": guidance_scale,
-                    "width": width,
-                    "height": height,
-                }
+                if mode == "custom":
+                    generate_kwargs = {
+                        "prompt": prompt,
+                        "negative_prompt": negative_prompt,
+                        "num_inference_steps": steps,
+                        "guidance_scale": guidance_scale,
+                        "width": width,
+                        "height": height,
+                    }
+                elif mode == "quick":
+                    controlnet_conditioning_scale=0.7
+                    generate_kwargs = {
+                        "prompt": prompt,
+                        "negative_prompt": negative_prompt,
+                        "num_inference_steps": steps,
+                        "guidance_scale": guidance_scale,
+                        "width": width,
+                        "height": height,
+                        "pil_image":ip_adapter_ref_image,
+                        "controlnet_conditioning_scale":controlnet_conditioning_scale,
+                    }
                 
                 # 添加callback参数（如果支持）
                 if callback is not None:
@@ -548,6 +612,7 @@ class LocalDiffusionService:
         guidance_scale: float = 7.5,
         width: int = 512,
         height: int = 512,
+        mode: str = "custom",
         callback: Optional[Callable] = None,
     ) -> str:
         USE_LONG_NEGATIVE_PROMPT = False
@@ -588,6 +653,7 @@ class LocalDiffusionService:
                 guidance_scale=guidance_scale,
                 width=width,
                 height=height,
+                mode=mode,
                 callback=callback,
             )
         except Exception as e:
