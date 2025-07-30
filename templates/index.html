@@ -444,6 +444,7 @@
     let isModelLoaded = false;
     let isLoadingModel = false;
     let selectedModel = null;
+    let currentGenerationMode = 'quick'; // 当前生成模式：'quick' 或 'custom'
 
     // --- 应用初始化 ---
     window.addEventListener('load', initApp);
@@ -724,7 +725,67 @@
 
     // --- 生成按钮的"守卫"函数 ---
     function handleGenerateClick() {
+        // 根据当前模式选择不同的生成逻辑
+        if (currentGenerationMode === 'quick') {
+            handleQuickGenerate();
+        } else {
+            handleCustomGenerate();
+        }
+    }
 
+    // --- 一键式生成逻辑 ---
+    function handleQuickGenerate() {
+        // 1. 前置检查
+        if (!document.getElementById('novelText').value.trim()) {
+            alert('请输入小说文本！');
+            return;
+        }
+        if (!currentUser) {
+            alert('无法获取用户信息，请刷新页面重试。');
+            return;
+        }
+
+        // 检查是否选择了主角形象
+        const characterImage = document.getElementById('currentCharacterImage');
+        if (!characterImage.src || characterImage.src === '' || characterImage.style.display === 'none') {
+            alert('请先选择主角形象！');
+            return;
+        }
+
+
+        if (currentUser.credits < requiredCredits) {
+            alert(`积分不足！\n\n本次生成需要: ${requiredCredits} 积分\n您当前拥有: ${currentUser.credits} 积分\n\n请减少场景数量或等待明天积分重置。`);
+            return;
+        }
+
+        // 一键式生成：固定使用ControlNet，无需检查模型加载
+        console.log('执行一键式生成逻辑');
+        // TODO: 这里将来会调用 /quick-generate-stream
+        const numScenes = parseInt(document.getElementById('numScenes').value);
+        const requiredCredits = numScenes * 100;
+        const text = document.getElementById('novelText').value;
+        const steps = document.getElementById('steps').value;
+        const guidance = document.getElementById('guidance').value;
+        const width = document.getElementById('width').value;
+        const height = document.getElementById('height').value;
+        const mode = currentGenerationMode;
+
+        const params = {
+            text: text,
+            num_scenes: numScenes,
+            steps: steps,
+            guidance: guidance,
+            width: width,
+            height: height,
+            mode: mode
+        };
+
+        sessionStorage.setItem('comicParams', JSON.stringify(params));
+        window.location.href = '/pic';
+    }
+
+    // --- 自定义生成逻辑（复用现有逻辑） ---
+    function handleCustomGenerate() {
         // 1. 前置检查
         if (!isModelLoaded) {
             alert('请先选择并成功加载一个模型！');
@@ -746,6 +807,7 @@
         const guidance = document.getElementById('guidance').value;
         const width = document.getElementById('width').value;
         const height = document.getElementById('height').value;
+        const mode = currentGenerationMode;
 
         if (currentUser.credits < requiredCredits) {
             alert(`积分不足！\n\n本次生成需要: ${requiredCredits} 积分\n您当前拥有: ${currentUser.credits} 积分\n\n请减少场景数量或等待明天积分重置。`);
@@ -758,7 +820,8 @@
             steps: steps,
             guidance: guidance,
             width: width,
-            height: height
+            height: height,
+            mode: mode
         };
 
         sessionStorage.setItem('comicParams', JSON.stringify(params));
@@ -772,6 +835,10 @@
 
     // --- 生成模式切换功能 ---
     function switchGenerationMode(mode) {
+        // 更新全局模式状态
+        currentGenerationMode = mode;
+        console.log('切换到生成模式:', mode);
+        
         // 更新标签栏状态
         document.querySelectorAll('.mode-tab-item').forEach(tab => {
             tab.classList.remove('active');

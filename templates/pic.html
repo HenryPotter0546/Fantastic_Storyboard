@@ -334,10 +334,22 @@
             window.location.href = '/login';
         });
 
+        // 页面跳转后要把缓存里面的参数拿出来
+        const params = JSON.parse(sessionStorage.getItem('comicParams'));
+        if (!params) {
+            alert('参数丢失，请返回首页重新开始！');
+            goBack();
+            return;
+        }
+
         await getUserInfo();
-        await checkModelStatus();
-        await loadAvailableModels();
-        startGeneration();
+        if (params.mode === 'custom') {
+            await checkModelStatus();
+            await loadAvailableModels();
+            startGeneration(params);
+        } else {
+            startGeneration(params);
+        }
     });
 
     async function getUserInfo() {
@@ -394,13 +406,7 @@
         }
     }
 
-    function startGeneration() {
-        const params = JSON.parse(sessionStorage.getItem('comicParams'));
-        if (!params) {
-            alert('参数丢失，请返回首页重新开始！');
-            goBack();
-            return;
-        }
+    function startGeneration(params) {
         generateComic(params);
     }
 
