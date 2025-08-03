@@ -31,10 +31,11 @@ pixel_lora_rank_32:
 
 # SDXL-IP-Adapter-ControlNet模型配置（用于一键式生成）
 sdxl-ip-adapter:
-  path: "/home/henry/workspace/model_checkpoint/sdxl-ip-adapter"  # 请根据实际路径修改
-  controlnet_path: "diffusers/controlnet-depth-sdxl-1.0"
-  image_encoder_path: "diffusers/image-encoder-sdxl-1.0"
-  ip_ckpt: "diffusers/ip-adapter-sdxl-1.0"
+  path: "/home/henry/workspace/model_checkpoint/sd-v1-5"  # 请根据实际路径修改
+  controlnet_path: "/home/henry/workspace/model_checkpoint/controlnet/sd-controlnet-openpose"
+  image_encoder_path: "/home/henry/workspace/comic_pose_generation/IP-Adapter/IP-Adapter/models/image_encoder/"
+  ip_ckpt: "/home/henry/workspace/comic_pose_generation/IP-Adapter/IP-Adapter/models/ip-adapter_sd15.bin"
+  vae_model_path: "/home/henry/workspace/model_checkpoint/sd-vae-ft-mse"
   single_files: false
   use_safetensors: true
   type: "ip-adapter"
