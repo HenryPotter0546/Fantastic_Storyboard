@@ -322,7 +322,7 @@ async def novel_to_comic_stream(
     3. 调用核心生成器函数。
     """
     # 计算所需积分
-    required_credits = num_scenes * 100
+    required_credits = num_scenes * 1
     if current_user.credits < required_credits:
         # 这里不能直接 raise HTTPException，因为前端期望的是流式响应。
         # 我们需要通过流发送一个错误消息。
@@ -615,6 +615,46 @@ async def regenerate_image(request: dict):
         steps = request.get("steps", 30)
         session_id = request.get("session_id")  # 新增：获取session_id
 
+        # 获取mode参数
+        mode = request.get("mode", "custom")
+        
+        # 根据mode设置相关图像
+        if mode == "quick":
+            # 一键式生成模式：设置IP-Adapter参考图像和ControlNet控制图像
+            from PIL import Image
+            
+            # 设置IP-Adapter参考图像（主角形象）
+            if current_character:
+                try:
+                    character_image_path = f"static/character_images/{current_character['path']}"
+                    if os.path.exists(character_image_path):
+                        character_image = Image.open(character_image_path)
+                        # 确保图像大小合适
+                        character_image = character_image.resize((512, 512))
+                        diffusion_service.ip_adapter_ref_image = character_image
+                        logger.info(f"设置IP-Adapter参考图像: {character_image_path}")
+                    else:
+                        logger.warning(f"主角形象文件不存在: {character_image_path}")
+                except Exception as e:
+                    logger.error(f"加载主角形象失败: {str(e)}")
+            
+            # 设置ControlNet控制图像（如果用户选择了的话）
+            controlnet_image_path = request.get("controlnet_image_path")
+            if controlnet_image_path and os.path.exists(controlnet_image_path):
+                try:
+                    controlnet_image = Image.open(controlnet_image_path)
+                    controlnet_image = controlnet_image.resize((512, 512))
+                    diffusion_service.control_image = controlnet_image
+                    logger.info(f"设置ControlNet控制图像: {controlnet_image_path}")
+                except Exception as e:
+                    logger.error(f"加载ControlNet图像失败: {str(e)}")
+            else:
+                logger.info("未提供ControlNet控制图像，仅使用IP-Adapter")
+        else:
+            # 自定义模式：清除相关图像设置
+            diffusion_service.ip_adapter_ref_image = None
+            diffusion_service.control_image = None
+
         logger.info(f"收到重新生成图片请求: scene_index={scene_index}, description={description}, steps={steps}, session_id={session_id}")
 
         if scene_index is None or description is None:
@@ -671,12 +711,12 @@ async def regenerate_image(request: dict):
 
             # 生成图片，使用传入的steps参数
             image_url = diffusion_service.generate_image_with_style(
-                final_prompt,
-               
-                steps,  # 使用传入的steps参数
-                7.5,  # guidance_scale
-                512,  # width
-                512  # height
+                prompt=final_prompt,
+                mode=mode,
+                steps=steps,  # 使用传入的steps参数
+                guidance_scale=7.5,  # guidance_scale
+                width=512,  # width
+                height=512  # height
             )
 
             # 新增：如果提供了session_id，则保存图片到对应目录

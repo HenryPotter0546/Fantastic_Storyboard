@@ -23,7 +23,6 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-global ip_adapter_ref_image
 
 
 class LocalDiffusionService:
@@ -41,6 +40,10 @@ class LocalDiffusionService:
 
         # 保存原始权重的字典，支持多个组件
         self._original_state_dicts = {}
+        
+        # IP-Adapter和ControlNet相关属性
+        self.ip_adapter_ref_image = None
+        self.control_image = None
 
         if model_name:
             self.model_config = self._load_model_config()
@@ -210,26 +213,45 @@ class LocalDiffusionService:
 
                 # copy from https://github.com/tencent-ailab/IP-Adapter/blob/main/ip_adapter_sdxl_controlnet_demo.ipynb
                 
-                from diffusers import StableDiffusionXLControlNetPipeline, ControlNetModel, StableDiffusionXLPipeline
-                from ip_adapter import IPAdapterXL
+                from diffusers import (
+                    StableDiffusionXLControlNetPipeline, 
+                    ControlNetModel, 
+                    StableDiffusionControlNetPipeline, 
+                    AutoencoderKL, 
+                    DDIMScheduler,
+                )
+                from service.ip_adapter import IPAdapterXL,IPAdapter
 
                 # controlnet_path = "diffusers/controlnet-depth-sdxl-1.0"
                 controlnet_path = self.model_config['controlnet_path']
                 image_encoder_path = self.model_config['image_encoder_path']
                 ip_ckpt = self.model_config['ip_ckpt']
+                vae_model_path = self.model_config['vae_model_path']
 
-                # load SDXL pipeline
-                controlnet = ControlNetModel.from_pretrained(controlnet_path, variant="fp16", use_safetensors=True, torch_dtype=torch.float16)
-                pipe = StableDiffusionXLControlNetPipeline.from_pretrained(
+                # load SD pipeline
+                noise_scheduler = DDIMScheduler(
+                    num_train_timesteps=1000,
+                    beta_start=0.00085,
+                    beta_end=0.012,
+                    beta_schedule="scaled_linear",
+                    clip_sample=False,
+                    set_alpha_to_one=False,
+                    steps_offset=1,
+                )
+                vae = AutoencoderKL.from_pretrained(vae_model_path).to(dtype=torch.float16)
+                controlnet = ControlNetModel.from_pretrained(controlnet_path, torch_dtype=torch.float16)
+                pipe = StableDiffusionControlNetPipeline.from_pretrained(
                     model_path,
                     controlnet=controlnet,
-                    use_safetensors=True,
+                    vae=vae,
                     torch_dtype=torch.float16,
-                    add_watermarker=False,
+                    scheduler=noise_scheduler,
+                    feature_extractor=None,
+                    safety_checker=None,
                 )
 
                 # load ip-adapter
-                self.pipeline = IPAdapterXL(pipe, image_encoder_path, ip_ckpt)
+                self.pipeline = IPAdapter(pipe, image_encoder_path, ip_ckpt, device=self.device)
 
                 # image = Image.open("assets/images/statue.png")
                 # depth_map = Image.open("assets/structure_controls/depth.png").resize((1024, 1024))
@@ -239,15 +261,15 @@ class LocalDiffusionService:
             else:
                 raise ValueError(f"未知模型类型: {model_type}")
 
-            self.pipeline.scheduler = DPMSolverMultistepScheduler.from_config(
-                self.pipeline.scheduler.config
-            )
+            if model_type.lower() != 'ip-adapter':
+                self.pipeline.scheduler = DPMSolverMultistepScheduler.from_config(
+                    self.pipeline.scheduler.config
+                )
+                self.pipeline = self.pipeline.to(self.device)
 
-            self.pipeline = self.pipeline.to(self.device)
-
-            if self.device == "cuda":
-                self.pipeline.enable_attention_slicing()
-                self.pipeline.enable_vae_slicing()
+                if self.device == "cuda":
+                    self.pipeline.enable_attention_slicing()
+                    self.pipeline.enable_vae_slicing()
 
             setattr(self.pipeline, '_model_path', model_path)
 
@@ -569,7 +591,7 @@ class LocalDiffusionService:
                         "height": height,
                     }
                 elif mode == "quick":
-                    controlnet_conditioning_scale=0.7
+                    # 使用IP-Adapter和ControlNet进行一键式生成
                     generate_kwargs = {
                         "prompt": prompt,
                         "negative_prompt": negative_prompt,
@@ -577,9 +599,29 @@ class LocalDiffusionService:
                         "guidance_scale": guidance_scale,
                         "width": width,
                         "height": height,
-                        "pil_image":ip_adapter_ref_image,
-                        "controlnet_conditioning_scale":controlnet_conditioning_scale,
                     }
+                    
+                    # 添加IP-Adapter参考图像（如果可用）
+                    if self.ip_adapter_ref_image is not None:
+                        generate_kwargs["pil_image"] = self.ip_adapter_ref_image
+                        logger.info("使用IP-Adapter参考图像")
+                    
+                    # 添加ControlNet控制图像（如果可用）
+                    if self.control_image is not None:
+                        generate_kwargs["image"] = self.control_image
+                        generate_kwargs["controlnet_conditioning_scale"] = 0.7
+                        logger.info("使用ControlNet控制图像")
+                    else:
+                        # 如果没有ControlNet图像，创建一个空白图像作为控制图像
+                        from PIL import Image
+                        import numpy as np
+                        blank_image = Image.fromarray(np.zeros((height, width, 3), dtype=np.uint8))
+                        generate_kwargs["image"] = blank_image
+                        generate_kwargs["controlnet_conditioning_scale"] = 0.0  # 设置为0表示不使用控制
+                        logger.info("使用空白ControlNet控制图像")
+                    
+                    if self.ip_adapter_ref_image is None and self.control_image is None:
+                        logger.warning("一键式生成模式：未找到参考图像或控制图像，使用标准生成")
                 
                 # 添加callback参数（如果支持）
                 if callback is not None:
@@ -588,7 +630,34 @@ class LocalDiffusionService:
                         "callback_steps": 1,
                     })
 
-                image = self.pipeline(**generate_kwargs).images[0]
+                # 检查是否是IP-Adapter模型
+                if hasattr(self.pipeline, 'generate') and callable(getattr(self.pipeline, 'generate')):
+                    # IP-Adapter模型使用generate方法
+                    logger.info("使用IP-Adapter生成方法")
+                    
+                    # 调整参数以匹配IP-Adapter的generate方法签名
+                    ip_adapter_kwargs = {
+                        "prompt": generate_kwargs.get("prompt"),
+                        "negative_prompt": generate_kwargs.get("negative_prompt"),
+                        "num_inference_steps": generate_kwargs.get("num_inference_steps", 30),
+                        "guidance_scale": generate_kwargs.get("guidance_scale", 7.5),
+                        "scale": 1.0,  # IP-Adapter的scale参数
+                    }
+                    
+                    # 添加IP-Adapter特定参数
+                    if "pil_image" in generate_kwargs:
+                        ip_adapter_kwargs["pil_image"] = generate_kwargs["pil_image"]
+                    
+                    # 添加其他kwargs参数
+                    for key, value in generate_kwargs.items():
+                        if key not in ["prompt", "negative_prompt", "num_inference_steps", "guidance_scale", "scale", "pil_image"]:
+                            ip_adapter_kwargs[key] = value
+                    
+                    images = self.pipeline.generate(**ip_adapter_kwargs)
+                    image = images[0] if isinstance(images, list) else images
+                else:
+                    # 标准pipeline直接调用
+                    image = self.pipeline(**generate_kwargs).images[0]
 
             buffered = io.BytesIO()
             image.save(buffered, format="PNG")
@@ -634,7 +703,7 @@ class LocalDiffusionService:
 
         try:
             style_prompts = {
-                "comic": "NONE",
+                "comic": "comic style",
                 "realistic": "photorealistic, highly detailed, professional photography, sharp focus",
                 "artistic": "artistic style, painterly, oil painting, masterpiece, beautiful composition",
                 "cartoon": "cartoon style, cute, colorful, simple lines, friendly",
@@ -643,7 +712,7 @@ class LocalDiffusionService:
                 "pixel_comic": "pixel art style, comic panel, comic book layout, 8-bit, 16-bit, low resolution, blocky, pixelated, clear lines, dynamic composition, retro gaming aesthetic",
             }
 
-            style_prompt = style_prompts.get(style, style_prompts["pixel_comic"])
+            style_prompt = style_prompts.get(style, style_prompts["comic"])
             full_prompt = f"{style_prompt}, {prompt}, high quality, detailed"
 
             return self.generate_image(
