@@ -112,6 +112,76 @@
             cursor: not-allowed;
         }
 
+        /* ControlNet 图像选择样式 */
+        .controlnet-selection {
+            margin-top: 15px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background-color: #f8f9fa;
+        }
+
+        .controlnet-selection h4 {
+            margin: 0 0 15px 0;
+            color: #333;
+            font-size: 16px;
+        }
+
+        .controlnet-images {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            margin-bottom: 15px;
+        }
+
+        .controlnet-image-item {
+            width: 120px;
+            text-align: center;
+            cursor: pointer;
+            padding: 10px;
+            border: 2px solid transparent;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+        }
+
+        .controlnet-image-item:hover {
+            border-color: #007bff;
+            background-color: #f0f8ff;
+        }
+
+        .controlnet-image-item.selected {
+            border-color: #007bff;
+            background-color: #e3f2fd;
+        }
+
+        .controlnet-image-item img {
+            width: 100px;
+            height: 100px;
+            object-fit: cover;
+            border-radius: 4px;
+            margin-bottom: 8px;
+        }
+
+        .controlnet-image-item .no-image {
+            width: 100px;
+            height: 100px;
+            background-color: #f0f0f0;
+            border: 2px dashed #ccc;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 8px;
+            color: #666;
+            font-size: 12px;
+        }
+
+        .controlnet-image-item span {
+            display: block;
+            font-size: 12px;
+            color: #666;
+        }
+
         .btn-warning {
             background-color: #ffc107;
             color: #212529;
@@ -547,6 +617,28 @@
                                 <button onclick="saveDescription(${i})" id="save-btn-${i}" style="display: none;">保存</button>
                                 <button onclick="cancelEdit(${i})" id="cancel-btn-${i}" style="display: none;">取消</button>
                                 <button onclick="regenerateImage(${i})" id="regen-btn-${i}" style="display: none;">重新生成</button>
+                                <div id="controlnet-selection-${i}" style="display: none;" class="controlnet-selection">
+                                    <h4>选择ControlNet控制图像（一键式生成模式）</h4>
+                                    <div class="controlnet-images">
+                                        <div class="controlnet-image-item" onclick="selectControlnetImage('${i}', 'controlnet1.jpg', this)">
+                                            <img src="/static/controlnet_images/controlnet1.jpg" alt="ControlNet 1" onerror="this.style.display='none'">
+                                            <span>控制图像 1</span>
+                                        </div>
+                                        <div class="controlnet-image-item" onclick="selectControlnetImage('${i}', 'controlnet2.jpg', this)">
+                                            <img src="/static/controlnet_images/controlnet2.jpg" alt="ControlNet 2" onerror="this.style.display='none'">
+                                            <span>控制图像 2</span>
+                                        </div>
+                                        <div class="controlnet-image-item" onclick="selectControlnetImage('${i}', 'controlnet3.jpg', this)">
+                                            <img src="/static/controlnet_images/controlnet3.jpg" alt="ControlNet 3" onerror="this.style.display='none'">
+                                            <span>控制图像 3</span>
+                                        </div>
+                                        <div class="controlnet-image-item" onclick="selectControlnetImage('${i}', '', this)">
+                                            <div class="no-image">不使用控制图像</div>
+                                            <span>无控制图像</span>
+                                        </div>
+                                    </div>
+                                    <button onclick="confirmRegenerate(${i})" id="confirm-regen-btn-${i}" style="display: none;">确认重新生成</button>
+                                </div>
                             </div>
                         </div>
                         <div class="image-area">
@@ -829,6 +921,63 @@ async function regenerateImage(sceneIndex) {
         return;
     }
 
+    // 从sessionStorage获取mode参数
+    const params = JSON.parse(sessionStorage.getItem('comicParams'));
+    const mode = params.mode;
+
+    // 如果是一键式生成模式，显示ControlNet图像选择
+    if (mode === 'quick') {
+        const controlnetSelection = document.getElementById(`controlnet-selection-${sceneIndex}`);
+        if (controlnetSelection) {
+            controlnetSelection.style.display = 'block';
+            // 清除之前的选择
+            const selectedItems = controlnetSelection.querySelectorAll('.controlnet-image-item.selected');
+            selectedItems.forEach(item => item.classList.remove('selected'));
+            document.getElementById(`confirm-regen-btn-${sceneIndex}`).style.display = 'none';
+        }
+        return;
+    }
+
+    // 自定义模式直接进行重新生成
+    await performRegenerate(sceneIndex, description, mode, '');
+}
+
+// 选择ControlNet图像
+function selectControlnetImage(sceneIndex, imagePath, element) {
+    // 清除其他选择
+    const container = document.getElementById(`controlnet-selection-${sceneIndex}`);
+    const allItems = container.querySelectorAll('.controlnet-image-item');
+    allItems.forEach(item => item.classList.remove('selected'));
+    
+    // 选中当前项
+    element.classList.add('selected');
+    
+    // 显示确认按钮
+    document.getElementById(`confirm-regen-btn-${sceneIndex}`).style.display = 'inline-block';
+    
+    // 存储选择的图像路径
+    element.dataset.selectedImage = imagePath;
+}
+
+// 确认重新生成
+async function confirmRegenerate(sceneIndex) {
+    const description = scenes[sceneIndex];
+    const params = JSON.parse(sessionStorage.getItem('comicParams'));
+    const mode = params.mode;
+    
+    // 获取选择的ControlNet图像路径
+    const selectedItem = document.querySelector(`#controlnet-selection-${sceneIndex} .controlnet-image-item.selected`);
+    const controlnetImagePath = selectedItem ? selectedItem.dataset.selectedImage : '';
+    
+    // 隐藏选择界面
+    document.getElementById(`controlnet-selection-${sceneIndex}`).style.display = 'none';
+    
+    // 执行重新生成
+    await performRegenerate(sceneIndex, description, mode, controlnetImagePath);
+}
+
+// 执行重新生成的通用函数
+async function performRegenerate(sceneIndex, description, mode, controlnetImagePath) {
     const regenerationSteps = parseInt(document.getElementById('regenerationSteps').value) || 30;
 
     const regenBtn = document.getElementById(`regen-btn-${sceneIndex}`);
@@ -845,15 +994,23 @@ async function regenerateImage(sceneIndex) {
     progressBar.textContent = '准备中...';
 
     try {
+        const requestBody = {
+            description: description,
+            sceneIndex: sceneIndex,
+            steps: regenerationSteps,
+            mode: mode,
+            session_id: currentSessionId
+        };
+        
+        // 如果提供了ControlNet图像路径，添加到请求中
+        if (controlnetImagePath) {
+            requestBody.controlnet_image_path = `/static/controlnet_images/${controlnetImagePath}`;
+        }
+
         const response = await fetch('/regenerate-image', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-                description: description,
-                sceneIndex: sceneIndex,
-                steps: regenerationSteps,
-                session_id: currentSessionId  // 新增：传递当前会话ID
-            })
+            body: JSON.stringify(requestBody)
         });
 
         const result = await response.json();

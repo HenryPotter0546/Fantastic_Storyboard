@@ -736,10 +736,12 @@
     // --- 一键式生成逻辑 ---
     function handleQuickGenerate() {
         // 1. 前置检查
+
         if (!document.getElementById('novelText').value.trim()) {
             alert('请输入小说文本！');
             return;
         }
+
         if (!currentUser) {
             alert('无法获取用户信息，请刷新页面重试。');
             return;
@@ -749,12 +751,6 @@
         const characterImage = document.getElementById('currentCharacterImage');
         if (!characterImage.src || characterImage.src === '' || characterImage.style.display === 'none') {
             alert('请先选择主角形象！');
-            return;
-        }
-
-
-        if (currentUser.credits < requiredCredits) {
-            alert(`积分不足！\n\n本次生成需要: ${requiredCredits} 积分\n您当前拥有: ${currentUser.credits} 积分\n\n请减少场景数量或等待明天积分重置。`);
             return;
         }
 
@@ -769,6 +765,11 @@
         const width = document.getElementById('width').value;
         const height = document.getElementById('height').value;
         const mode = currentGenerationMode;
+
+        if (currentUser.credits < requiredCredits) {
+            alert(`积分不足！\n\n本次生成需要: ${requiredCredits} 积分\n您当前拥有: ${currentUser.credits} 积分\n\n请减少场景数量或等待明天积分重置。`);
+            return;
+        }
 
         const params = {
             text: text,
