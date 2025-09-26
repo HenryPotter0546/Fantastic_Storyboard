@@ -1,7 +1,9 @@
 # 小说转漫画服务 (本地Diffusion版本)
 
 这是一个基于本地部署的Stable Diffusion模型的小说转漫画服务，可以将小说文本转换为漫画风格的图片。
+## 运行示例
 
+![运行示例](screenshots/example_one.png)
 ## 功能特点
 
 - 🎨 使用本地部署的Stable Diffusion模型生成图片
@@ -67,9 +69,7 @@ Unstable:
 5. 点击"生成漫画"按钮
 6. 等待图片生成完成
 
-## 运行示例
 
-![运行示例](screenshots/example_one.png)
 
 ## 生成视频
 请提前在本地安装 ffmpeg
