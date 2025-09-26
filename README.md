@@ -96,7 +96,7 @@ Unstable:
 
 ## 贡献者
 
-Weiheng Li, Sheng Wang, Jingwei Zeng, Xiaoyu Zhuang, Yihao Wang
+感谢Sheng Wang, Jingwei Zeng的贡献
 
 ## 许可证
 
