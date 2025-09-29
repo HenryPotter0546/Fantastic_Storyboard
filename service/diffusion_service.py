@@ -609,7 +609,7 @@ class LocalDiffusionService:
                     # 添加ControlNet控制图像（如果可用）
                     if self.control_image is not None:
                         generate_kwargs["image"] = self.control_image
-                        generate_kwargs["controlnet_conditioning_scale"] = 0.7
+                        generate_kwargs["controlnet_conditioning_scale"] = 0.5
                         logger.info("使用ControlNet控制图像")
                     else:
                         # 如果没有ControlNet图像，创建一个空白图像作为控制图像
@@ -641,7 +641,7 @@ class LocalDiffusionService:
                         "negative_prompt": generate_kwargs.get("negative_prompt"),
                         "num_inference_steps": generate_kwargs.get("num_inference_steps", 30),
                         "guidance_scale": generate_kwargs.get("guidance_scale", 7.5),
-                        "scale": 1.0,  # IP-Adapter的scale参数
+                        "scale": 0.4,  # IP-Adapter的scale参数
                     }
                     
                     # 添加IP-Adapter特定参数
