@@ -99,6 +99,7 @@ Unstable:
 感谢Sheng Wang, Jingwei Zeng的贡献
 
 ## 许可证
-
 MIT License
-作者联系方式henrypotterheng@gmail.com
+
+## 作者邮箱📫
+henrypotterheng@gmail.com
