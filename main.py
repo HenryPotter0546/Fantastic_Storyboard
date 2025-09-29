@@ -973,5 +973,5 @@ current_character = None
 
 if __name__ == "__main__":
     logger.info("启动服务器...")
-    uvicorn.run(app, host="localhost", port=8080)
+    uvicorn.run(app, host="localhost", port=8000)
 
