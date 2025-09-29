@@ -1,16 +1,17 @@
 # 小说转漫画服务 (本地Diffusion版本)
 
-这是一个基于本地部署的Stable Diffusion模型的小说转漫画服务，可以将小说文本转换为漫画风格的图片。
+这是一个基于本地部署的Stable Diffusion模型的小说转漫画服务，可以将小说文本转换为漫画风格的连环画视频。
 ## 运行示例
+<img src="screenshots/example_three.png" alt="运行示例" width="900">
 
-![运行示例](screenshots/example_one.png)
+![运行示例](screenshots/example_two.png)
+
 
 ## 精彩Demo
 以下是功能演示视频（点击播放）：
-https://github.com/user-attachments/assets/66cf5161-5c38-4ef0-9408-b1e70b5bfb67
-
-你的浏览器不支持视频播放，请点击链接查看：[示例视频](https://henrypotter0546.github.io/Fantastic_Storyboard/screenshots/example_video.mp4)
-
+<video src="https://github.com/user-attachments/assets/66cf5161-5c38-4ef0-9408-b1e70b5bfb67" width="800" controls>
+  你的浏览器不支持视频播放，请点击链接查看：[示例视频](https://github.com/user-attachments/assets/66cf5161-5c38-4ef0-9408-b1e70b5bfb67)
+</video>
 ## 功能特点
 
 - 🎨 使用本地部署的Stable Diffusion模型生成图片
