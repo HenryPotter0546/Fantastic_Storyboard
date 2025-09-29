@@ -101,4 +101,4 @@ Unstable:
 ## 许可证
 
 MIT License
-如需商用请联系henrypotterheng@gmail.com
+作者联系方式henrypotterheng@gmail.com
