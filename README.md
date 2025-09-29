@@ -8,6 +8,7 @@
 ## 精彩Demo
 以下是功能演示视频（点击播放）：
 https://github.com/user-attachments/assets/66cf5161-5c38-4ef0-9408-b1e70b5bfb67
+
 你的浏览器不支持视频播放，请点击链接查看：[示例视频](https://henrypotter0546.github.io/Fantastic_Storyboard/screenshots/example_video.mp4)
 
 ## 功能特点
