@@ -12,6 +12,7 @@
 <video src="https://github.com/user-attachments/assets/66cf5161-5c38-4ef0-9408-b1e70b5bfb67" width="800" controls>
   你的浏览器不支持视频播放，请点击链接查看：[示例视频](https://github.com/user-attachments/assets/66cf5161-5c38-4ef0-9408-b1e70b5bfb67)
 </video>
+手动播放：https://henrypotter0546.github.io/Fantastic_Storyboard/screenshots/example_video.mp4
 ## 功能特点
 
 - 🎨 使用本地部署的Stable Diffusion模型生成图片
