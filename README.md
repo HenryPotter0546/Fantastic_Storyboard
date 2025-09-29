@@ -11,6 +11,7 @@
   你的浏览器不支持视频播放，请点击链接查看：[示例视频](https://henrypotter0546.github.io/Fantastic_Storyboard/screenshots/example_video.mp4)
 </video>
 
+
 ## 功能特点
 
 - 🎨 使用本地部署的Stable Diffusion模型生成图片
